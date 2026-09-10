@@ -36,6 +36,9 @@ func Handler() http.Handler {
 		if strings.HasSuffix(r.URL.Path, ".css") {
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		}
+		if r.URL.Path == "/" || strings.HasSuffix(r.URL.Path, ".html") {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		files.ServeHTTP(w, r)
 	})
 }

@@ -1,8 +1,8 @@
 appname=miair-plus
-version=2.0.0-alpha.1
+version=2.0.0-alpha.2
 display_name=MiAir Plus · Go
 desc=Go 原生小爱音箱 DLNA / AirPlay 1 扩展。预览版；无需 Docker 或 Python。AirPlay 和拖动进度需要系统 FFmpeg。Web 8310，DLNA 8311。安装前请停止旧版服务，手机、音箱和 NAS 需在同一局域网。
-platform=x86
+platform=all
 source=thirdparty
 maintainer=BearHero520
 maintainer_url=https://github.com/BearHero520/miair-plus

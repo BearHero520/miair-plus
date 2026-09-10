@@ -156,7 +156,7 @@ func normalizeTar(input []byte, app bool) ([]byte, error) {
 			sum := md5.Sum(b)
 			checksum = hex.EncodeToString(sum[:])
 		}
-		if h.Typeflag == tar.TypeDir || strings.HasPrefix(name, "cmd/") || app && name == "bin/miair-plus" {
+		if h.Typeflag == tar.TypeDir || strings.HasPrefix(name, "cmd/") || app && strings.HasPrefix(name, "bin/") {
 			h.Mode = 0755
 		} else {
 			h.Mode = 0644
@@ -218,13 +218,13 @@ func build(fnpack string) error {
 		return err
 	}
 	var sums strings.Builder
-	for _, arch := range []string{"amd64", "arm64"} {
-		stage, err := os.MkdirTemp(filepath.Join(root, "build"), "fpk-"+arch+"-")
+	for _, platform := range []string{"all"} {
+		stage, err := os.MkdirTemp(filepath.Join(root, "build"), "fpk-"+platform+"-")
 		if os.IsNotExist(err) {
 			if err = os.MkdirAll(filepath.Join(root, "build"), 0755); err != nil {
 				return err
 			}
-			stage, err = os.MkdirTemp(filepath.Join(root, "build"), "fpk-"+arch+"-")
+			stage, err = os.MkdirTemp(filepath.Join(root, "build"), "fpk-"+platform+"-")
 		}
 		if err != nil {
 			return err
@@ -232,32 +232,26 @@ func build(fnpack string) error {
 		if err = copyTree(filepath.Join(root, "packaging/fpk"), stage); err != nil {
 			return err
 		}
-		manifestPath := filepath.Join(stage, "manifest")
-		manifest, _ := os.ReadFile(manifestPath)
-		if arch == "arm64" {
-			manifest = bytes.ReplaceAll(manifest, []byte("platform=x86"), []byte("platform=arm"))
+		for _, arch := range []string{"amd64", "arm64"} {
+			bin := filepath.Join(stage, "app/bin", arch)
+			if err = os.MkdirAll(bin, 0755); err != nil {
+				return err
+			}
+			command := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", filepath.Join(bin, "miair-plus"), "./cmd/miair-plus")
+			command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+arch)
+			command.Stdout = os.Stdout
+			command.Stderr = os.Stderr
+			if err = command.Run(); err != nil {
+				return err
+			}
+			_ = os.Chmod(filepath.Join(bin, "miair-plus"), 0755)
 		}
-		if err = os.WriteFile(manifestPath, manifest, 0644); err != nil {
-			return err
-		}
-		bin := filepath.Join(stage, "app/bin")
-		if err = os.MkdirAll(bin, 0755); err != nil {
-			return err
-		}
-		command := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", filepath.Join(bin, "miair-plus"), "./cmd/miair-plus")
-		command.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux", "GOARCH="+arch)
-		command.Stdout = os.Stdout
-		command.Stderr = os.Stderr
-		if err = command.Run(); err != nil {
-			return err
-		}
-		_ = os.Chmod(filepath.Join(bin, "miair-plus"), 0755)
 		if err = sourceArchive(root, filepath.Join(stage, "app/source.tar.gz")); err != nil {
 			return err
 		}
 		license, _ := os.ReadFile(filepath.Join(root, "LICENSE"))
 		_ = os.WriteFile(filepath.Join(stage, "app/LICENSE"), license, 0644)
-		command = exec.Command(fnpack, "build", "--directory", stage)
+		command := exec.Command(fnpack, "build", "--directory", stage)
 		command.Dir = stage
 		command.Stdout = os.Stdout
 		command.Stderr = os.Stderr
@@ -268,7 +262,7 @@ func build(fnpack string) error {
 		if len(matches) != 1 {
 			return fmt.Errorf("fnpack produced %d packages", len(matches))
 		}
-		name := "miair-plus-2.0.0-alpha.1-linux-" + arch + ".fpk"
+		name := "miair-plus-2.0.0-alpha.2-" + platform + ".fpk"
 		target := filepath.Join(out, name)
 		if err = repack(matches[0], target); err != nil {
 			return err

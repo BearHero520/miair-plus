@@ -2,7 +2,11 @@
 
 将小爱音箱接入 DLNA / AirPlay 1 音频投送的 Go 原生桥接服务，提供简洁的磨砂风格管理页面和飞牛 fnOS 安装包。
 
-**当前为 `2.0.0-alpha.1` 预览版。已做协议与解码自动测试，尚未完成 fnOS、真实小爱音箱、QQ 音乐／网易云／OPPO／Apple 发送端的实机验收。不要把预览版当作全型号兼容的稳定版。**
+**当前为 `2.0.0-alpha.2` 预览版。已做协议与解码自动测试，尚未完成 fnOS、真实小爱音箱、QQ 音乐／网易云／OPPO／Apple 发送端的实机验收。不要把预览版当作全型号兼容的稳定版。**
+
+## 黑屏修复与通用安装包
+
+`alpha.2` 使用 `go:embed all:dist` 打包以下划线开头的前端辅助模块，修复 `_plugin-vue_export-helper` 返回 404 引起的黑屏。升级后请强制刷新页面（Ctrl+Shift+R）；入口 HTML 不再缓存。通用包内同时携带两个架构的 Go 二进制，由启动脚本按 CPU 自动选择。
 
 ## 这次改了什么
 
@@ -18,7 +22,7 @@
 
 | 项目 | 当前范围 |
 | --- | --- |
-| NAS 架构 | Linux amd64 / arm64 独立构建；ARM32 不支持 |
+| NAS 架构 | 单个通用 FPK 内含 Linux amd64 / arm64，启动时自动选择；ARM32 不支持 |
 | DLNA | SSDP、AVTransport、RenderingControl、ConnectionManager、GENA |
 | QQ 音乐、网易云 | 实现其可使用的通用 DLNA 音频接口；具体 App 版本需实测 |
 | OPPO 系统投送 | 仅当发送端提供 DLNA **音频**输出；不是 Miracast / 屏幕镜像接收器 |
@@ -31,7 +35,7 @@ FFmpeg 缺失时 DLNA 直接音频代理仍可使用，AirPlay 不会被错误�
 
 ## 安装到飞牛
 
-1. 从 Releases 下载与 CPU 对应的 `linux-amd64.fpk` 或 `linux-arm64.fpk`。
+1. 从 Releases 下载 `miair-plus-2.0.0-alpha.2-all.fpk`，x86_64 与 ARM64 使用同一个安装包。
 2. 停止旧版 MiAir / MiAir Plus，避免 8310 / 8311 端口冲突。预览版使用独立应用 ID `miair-plus`，不会覆盖旧 `airisland` 数据。
 3. 在飞牛应用中心手动安装，打开管理页面，创建自己的管理员账号。
 4. 在“账号”中使用米家扫码，刷新设备，选择音箱并保存。

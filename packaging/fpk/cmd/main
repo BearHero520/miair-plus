@@ -1,7 +1,12 @@
 #!/bin/sh
 set -eu
 umask 077
-APP="${TRIM_APPDEST:?}/bin/miair-plus"
+case "$(uname -m)" in
+  x86_64|amd64) ARCH=amd64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+  *) echo 'Unsupported CPU: MiAir Plus requires x86_64 or ARM64' >&2; exit 1 ;;
+esac
+APP="${TRIM_APPDEST:?}/bin/$ARCH/miair-plus"
 STATE="${TRIM_PKGVAR:?}"
 PIDFILE="$STATE/app.pid"
 export PATH="$TRIM_APPDEST/bin:/usr/local/bin:/usr/bin:/bin:/usr/trim/bin:$PATH"

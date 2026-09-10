@@ -7,7 +7,7 @@
    <div class="studio-tools"><n-button quaternary circle :aria-label="app.dark ? '切换浅色外观' : '切换深色外观'" @click="app.theme = app.dark ? 'light' : 'dark'"><template #icon><n-icon :component="app.dark ? SunnyOutline : MoonOutline"/></template></n-button><HeaderBar/></div>
   </header>
   <main id="main" class="studio-main" tabindex="-1"><div v-if="route.name !== 'dashboard'" class="workspace-heading"><div><span class="eyebrow">{{sections[String(route.name)]}}</span><h1>{{route.meta.title}}</h1><p>{{descriptions[String(route.name)]}}</p></div><span class="workspace-index">{{String(navigation.findIndex(n => n.name === route.name)+1).padStart(2,'0')}} / 05</span></div><router-view/></main>
-  <footer class="studio-footer"><span>MiAir Plus · 家中的声音控制台</span><span>2.0.0-alpha.1 · <router-link to="/logs">运行日志</router-link></span></footer>
+  <footer class="studio-footer"><span>MiAir Plus · 家中的声音控制台</span><span>2.0.0-alpha.2 · <router-link to="/logs">运行日志</router-link></span></footer>
  </div>
 </template>
 <script setup lang="ts">
