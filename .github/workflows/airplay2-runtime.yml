@@ -1,0 +1,31 @@
+name: Build native AirPlay 2 runtime
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build against Debian 12
+        run: |
+          mkdir -p runtime-output
+          docker run --rm -v "$PWD:/workspace:ro" -v "$PWD/runtime-output:/out" debian:bookworm bash /workspace/scripts/build-airplay2.sh
+      - name: Collect runtime and corresponding sources
+        run: |
+          sudo tar -C runtime-output -cJf airplay2-runtime-${{ matrix.arch }}.tar.xz bin lib licenses SHA256SUMS
+          sudo tar -C runtime-output -cJf airplay2-sources-${{ matrix.arch }}.tar.xz sources licenses
+      - uses: actions/upload-artifact@v4
+        with:
+          name: airplay2-${{ matrix.arch }}
+          path: airplay2-*.tar.xz
+          retention-days: 14
