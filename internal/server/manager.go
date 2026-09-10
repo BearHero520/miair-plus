@@ -6,6 +6,7 @@ import (
 	"github.com/BearHero520/miair-plus/internal/airplay"
 	"github.com/BearHero520/miair-plus/internal/airplay2"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"github.com/BearHero520/miair-plus/internal/dlna"
 	"github.com/BearHero520/miair-plus/internal/media"
 	"github.com/BearHero520/miair-plus/internal/xiaomi"
@@ -154,6 +155,7 @@ func (m *Manager) Apply() error {
 		m.proxy = media.NewProxy(fmt.Sprintf("http://%s:%d", host, state.DLNAPort), state.Secret)
 		m.mu.Unlock()
 		mux := http.NewServeMux()
+		diagnostics.Event("info", "DLNA", "投送服务已启动", map[string]string{"地址": host, "端口": fmt.Sprint(state.DLNAPort)})
 		mux.Handle("/media/", m.proxy)
 		mux.HandleFunc("GET /live/{id}", func(w http.ResponseWriter, r *http.Request) {
 			m.mu.RLock()
@@ -175,8 +177,16 @@ func (m *Manager) Apply() error {
 		}()
 	}
 	m.mu.Lock()
+	previousFFmpeg := m.ffmpeg
 	m.ffmpeg = ffmpeg
 	m.mu.Unlock()
+	if previousFFmpeg != ffmpeg {
+		level, message := "info", "音频组件已检测到"
+		if ffmpeg == "" {
+			level, message = "error", "音频组件不可用"
+		}
+		diagnostics.Event(level, "FFmpeg", message, map[string]string{"路径": ffmpeg})
+	}
 	target := airPlay2Target(state)
 	key := ""
 	if target != "" {
@@ -235,9 +245,16 @@ func (m *Manager) Apply() error {
 			delete(m.air, did)
 		}
 		m.mu.Lock()
+		oldName, oldError := m.names[did], m.errors[did]
 		m.names[did] = sp.DisplayName()
 		m.errors[did] = nameError
 		m.mu.Unlock()
+		if oldName != sp.DisplayName() {
+			diagnostics.Event("info", "发现服务", "音箱投送名称已更新", map[string]string{"音箱": sp.DisplayName()})
+		}
+		if nameError != "" && oldError != nameError {
+			diagnostics.Event("error", "发现服务", "广播更新失败", map[string]string{"音箱": sp.DisplayName(), "原因": nameError})
+		}
 	}
 	ap2Error := ""
 	if target != "" && m.ap2 == nil && !m.noDiscovery {
@@ -252,9 +269,19 @@ func (m *Manager) Apply() error {
 		ap2Error = "请选择一台已启用的音箱并登录小米账号"
 	}
 	m.mu.Lock()
+	previousError, previousRunning := m.ap2Error, m.ap2Running
 	m.ap2Error, m.ap2Running = ap2Error, m.ap2 != nil && m.ap2.Alive()
 	m.ap2Status = m.ap2
 	m.mu.Unlock()
+	if ap2Error != "" && previousError != ap2Error {
+		level := "error"
+		if target == "" {
+			level = "warn"
+		}
+		diagnostics.Event(level, "AirPlay 2", "接收组件未就绪", map[string]string{"原因": ap2Error})
+	} else if m.ap2 != nil && !previousRunning {
+		diagnostics.Event("info", "AirPlay 2", "接收组件已就绪", nil)
+	}
 	if !m.noDiscovery {
 		if m.discovery == nil {
 			d := dlna.NewDiscovery(host, state.DLNAPort)

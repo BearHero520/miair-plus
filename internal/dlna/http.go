@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"github.com/BearHero520/miair-plus/internal/media"
 	"io"
 	"net"
@@ -128,6 +129,7 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	action := envelope.Body.Action.XMLName.Local
+	started := time.Now()
 	header := strings.Trim(strings.TrimSpace(req.Header.Get("SOAPAction")), "\"'")
 	urn, headerAction, ok := strings.Cut(header, "#")
 	if ok && (urn != serviceURN(service) || headerAction != action) {
@@ -233,6 +235,15 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	default:
 		fault(w, 401, "Invalid Action")
 		return
+	}
+	if !strings.HasPrefix(action, "Get") || err != nil {
+		detail := map[string]string{"音箱": s.DLNAName, "操作": action, "耗时": fmt.Sprintf("%d ms", time.Since(started).Milliseconds())}
+		level, message := "info", "收到投送操作"
+		if err != nil {
+			level, message = "error", "投送操作失败"
+			detail["原因"] = err.Error()
+		}
+		diagnostics.Event(level, "DLNA", message, detail)
 	}
 	if err != nil {
 		fault(w, code, err.Error())

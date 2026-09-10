@@ -3,6 +3,7 @@ package dlna
 import (
 	"context"
 	"encoding/json"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"strconv"
 	"time"
 )
@@ -14,6 +15,8 @@ var pollSlots = make(chan struct{}, 4)
 func (r *Renderer) Poll(ctx context.Context) {
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
+	var lastFailure time.Time
+	failed := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -39,7 +42,16 @@ func (r *Renderer) Poll(ctx context.Context) {
 		cancel()
 		<-pollSlots
 		if err != nil {
+			if !failed || time.Since(lastFailure) > time.Minute {
+				diagnostics.Event("warn", "小米账号", "音箱状态读取失败", map[string]string{"音箱": cfg.DisplayName(), "原因": err.Error(), "建议": "检查网络或重新连接小米账号"})
+				lastFailure = time.Now()
+			}
+			failed = true
 			continue
+		}
+		if failed {
+			diagnostics.Event("info", "小米账号", "音箱状态连接恢复", map[string]string{"音箱": cfg.DisplayName()})
+			failed = false
 		}
 		parse := func(v any) (int, bool) {
 			switch n := v.(type) {

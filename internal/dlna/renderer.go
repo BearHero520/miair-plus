@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"github.com/BearHero520/miair-plus/internal/media"
 	"strings"
 	"sync"
@@ -189,6 +191,7 @@ func (r *Renderer) commandAt(ctx context.Context, generation uint64, fn func(con
 	cfg := r.cfg
 	r.mu.Unlock()
 	defer cancel()
+	started := time.Now()
 	err := fn(operation, cfg)
 	r.mu.Lock()
 	if generation != r.generation || r.root.Err() != nil {
@@ -202,7 +205,19 @@ func (r *Renderer) commandAt(ctx context.Context, generation uint64, fn func(con
 		r.lastError = ""
 		success()
 	}
+	state, air := r.state, r.airplay
 	r.mu.Unlock()
+	module := "DLNA"
+	if air {
+		module = "AirPlay"
+	}
+	detail := map[string]string{"音箱": cfg.DisplayName(), "状态": state, "耗时": fmt.Sprintf("%d ms", time.Since(started).Milliseconds())}
+	level, message := "info", "音箱操作完成"
+	if err != nil {
+		level, message = "error", "音箱操作失败"
+		detail["原因"] = err.Error()
+	}
+	diagnostics.Event(level, module, message, detail)
 	r.changed()
 	return err
 }

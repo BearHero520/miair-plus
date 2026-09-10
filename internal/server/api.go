@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"github.com/BearHero520/miair-plus/internal/web"
 	"github.com/BearHero520/miair-plus/internal/xiaomi"
 	"github.com/gorilla/websocket"
@@ -26,7 +27,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.0-alpha.3"
+const Version = "2.0.0-alpha.4"
 
 type API struct {
 	Store    *config.Store
@@ -37,29 +38,16 @@ type API struct {
 	started  time.Time
 	mu       sync.Mutex
 	attempts map[string][]time.Time
-	logs     []string
+	journal  *diagnostics.Journal
 	logins   []map[string]any
 	level    string
 	wsSlots  chan struct{}
 }
 
 func NewAPI(ctx context.Context, s *config.Store, m *Manager, c *xiaomi.Client) *API {
-	return &API{Store: s, Manager: m, Client: c, QR: xiaomi.NewQR(ctx, c), ctx: ctx, started: time.Now(), attempts: map[string][]time.Time{}, logs: []string{}, logins: []map[string]any{}, level: "info", wsSlots: make(chan struct{}, 16)}
+	return &API{Store: s, Manager: m, Client: c, QR: xiaomi.NewQR(ctx, c), ctx: ctx, started: time.Now(), attempts: map[string][]time.Time{}, journal: diagnostics.New(s.Directory()), logins: []map[string]any{}, level: "info", wsSlots: make(chan struct{}, 16)}
 }
-func (a *API) Write(b []byte) (int, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for _, line := range strings.Split(strings.TrimSpace(string(b)), "\n") {
-		if len(line) > 4096 {
-			line = line[:4096]
-		}
-		a.logs = append(a.logs, line)
-	}
-	if len(a.logs) > 500 {
-		a.logs = append([]string(nil), a.logs[len(a.logs)-500:]...)
-	}
-	return len(b), nil
-}
+func (a *API) Write(b []byte) (int, error) { return a.journal.Write(b) }
 func jsonOut(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -299,14 +287,17 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 			cookie = "userId=" + p.UserID + "; passToken=" + p.PassToken
 		}
 		if err := a.Client.Login(r.Context(), p.Username, p.Password, cookie); err != nil {
+			diagnostics.Event("error", "小米账号", "账号连接失败", map[string]string{"原因": err.Error()})
 			jsonOut(w, map[string]any{"success": false, "state": "failed", "error": err.Error(), "message": err.Error()})
 			return
 		}
 		a.Manager.Schedule()
 		jsonOut(w, map[string]any{"success": true, "state": "success", "message": "小米账号已连接"})
+		diagnostics.Event("info", "小米账号", "账号已连接", nil)
 	case "POST account/qrcode":
 		qr, err := a.QR.Start(r.Context())
 		if err != nil {
+			diagnostics.Event("error", "小米账号", "登录二维码获取失败", map[string]string{"原因": err.Error()})
 			fail(w, 502, err)
 			return
 		}
@@ -322,17 +313,19 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 		}
 		jsonOut(w, map[string]any{"success": true, "state": qr.State, "message": qr.Message})
 	case "GET logs":
-		a.mu.Lock()
-		lines := append([]string{}, a.logs...)
-		a.mu.Unlock()
-		jsonOut(w, map[string]any{"lines": lines})
+		entries, failure := a.journal.Snapshot()
+		jsonOut(w, map[string]any{"entries": entries, "lines": diagnostics.Lines(entries), "capacity": diagnostics.Capacity, "storage_error": failure})
+	case "GET diagnostics", "GET diagnostics/download":
+		result := a.diagnosticReport()
+		if path == "diagnostics/download" {
+			w.Header().Set("Content-Disposition", "attachment; filename=miair-plus-diagnostics.json")
+		}
+		jsonOut(w, result)
 	case "GET logs/download":
-		a.mu.Lock()
-		lines := append([]string{}, a.logs...)
-		a.mu.Unlock()
+		entries, _ := a.journal.Snapshot()
 		w.Header().Set("Content-Disposition", "attachment; filename=miair-plus.log")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		io.WriteString(w, strings.Join(lines, "\n"))
+		io.WriteString(w, strings.Join(diagnostics.Lines(entries), "\n"))
 	case "GET logs/level":
 		jsonOut(w, map[string]string{"level": "info"})
 	case "POST system/restart_services":
@@ -396,9 +389,10 @@ func (a *API) status() map[string]any {
 }
 func (a *API) settings() map[string]any {
 	ap2Running, ap2Error := a.Manager.AirPlay2Info()
+	ffmpegResolved, ffmpegSource := a.Manager.FFmpegInfo()
 	s := a.Store.Snapshot()
 	_, _, n, running, codec := a.Manager.Info()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_resolved": ffmpegResolved, "ffmpeg_source": ffmpegSource, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
 }
 
 type settingsPatch struct {
@@ -500,12 +494,14 @@ func (a *API) saveSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.Manager.Schedule()
+	diagnostics.Event("info", "设置", "设置已保存，后台应用中", nil)
 	jsonOut(w, map[string]any{"ok": true, "message": "已保存，服务将在后台更新"})
 }
 func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 	devices, err := a.Client.Devices(r.Context())
 	if err != nil {
 		jsonOut(w, map[string]any{"devices": []any{}, "error": err.Error()})
+		diagnostics.Event("error", "小米账号", "读取音箱列表失败", map[string]string{"原因": err.Error()})
 		return
 	}
 	err = a.Store.Update(func(s *config.State) error {
@@ -528,6 +524,7 @@ func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 		out = append(out, map[string]string{"miotDID": d.DID, "name": d.Name, "hardware": d.Hardware})
 	}
 	a.Manager.Schedule()
+	diagnostics.Event("info", "小米账号", "音箱列表已刷新", map[string]string{"数量": fmt.Sprint(len(out))})
 	jsonOut(w, map[string]any{"devices": out})
 }
 func (a *API) websocket(w http.ResponseWriter, r *http.Request, token string) {

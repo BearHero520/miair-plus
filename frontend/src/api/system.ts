@@ -52,6 +52,7 @@ export async function saveSettings(payload: Partial<Settings> & { password?: str
 }
 
 export interface SystemStatus {
+  ffmpeg_available?: boolean
   version: string
   dlna_running: boolean
   renderers_count: number

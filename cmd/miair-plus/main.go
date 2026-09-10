@@ -7,7 +7,6 @@ import (
 	"github.com/BearHero520/miair-plus/internal/config"
 	"github.com/BearHero520/miair-plus/internal/server"
 	"github.com/BearHero520/miair-plus/internal/xiaomi"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -41,7 +40,7 @@ func run() error {
 	client := xiaomi.New(store)
 	manager := server.NewManager(ctx, store, client, *noDiscovery)
 	api := server.NewAPI(ctx, store, manager, client)
-	log.SetOutput(io.MultiWriter(os.Stderr, api))
+	log.SetOutput(api)
 	go manager.Run()
 	go client.Maintain(ctx)
 	httpServer := &http.Server{Addr: *listen, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32768}

@@ -17,6 +17,7 @@ export interface StatusMessage {
   renderers_count: number
   speakers: {
     did: string
+    enabled: boolean
     dlna_name: string
     transport_state: string
     current_uri: string

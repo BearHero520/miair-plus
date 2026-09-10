@@ -7,6 +7,6 @@ import '@/styles/island.css'
 const app = useAppStore()
 const theme = computed(() => app.dark ? darkTheme : null)
 watchEffect(() => { document.documentElement.dataset.theme = app.dark ? 'dark' : 'light' })
-const overrides = computed<GlobalThemeOverrides>(() => ({ common: { primaryColor: app.dark ? '#8ed7b9' : '#217365', primaryColorHover: app.dark ? '#a8e7cb' : '#348976', primaryColorPressed: '#195b50', borderRadius: '12px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif' }, Card: { borderRadius: '20px' }, Button: { borderRadiusMedium: '12px', heightMedium: '42px' } }))
+const overrides = computed<GlobalThemeOverrides>(() => ({ common: { primaryColor: '#409EFF', primaryColorHover: '#79BBFF', primaryColorPressed: '#337ECC', borderRadius: '12px', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif' }, Card: { borderRadius: '20px' }, Button: { borderRadiusMedium: '12px', heightMedium: '42px' } }))
 </script>
 <style>html,body,#app{min-height:100%;margin:0}</style>

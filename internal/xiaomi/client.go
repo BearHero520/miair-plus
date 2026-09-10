@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -327,7 +328,9 @@ func (c *Client) Maintain(ctx context.Context) {
 			return
 		case <-t.C:
 			if c.Store.Snapshot().Xiaomi.UserID != "" {
-				_ = c.refresh(ctx, false)
+				if err := c.refresh(ctx, false); err != nil {
+					diagnostics.Event("warn", "小米账号", "凭据自动续期失败", map[string]string{"原因": err.Error(), "建议": "检查网络，必要时重新扫码登录"})
+				}
 			}
 		}
 	}

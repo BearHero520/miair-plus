@@ -37,7 +37,18 @@ type Receiver struct {
 	failure string
 }
 
-func RuntimeDir() string { return os.Getenv("MIAIR_AUDIO_DIR") }
+func RuntimeDir() string {
+	if dir := os.Getenv("MIAIR_AUDIO_DIR"); dir != "" {
+		return dir
+	}
+	if exe, e := os.Executable(); e == nil {
+		dir := filepath.Join(filepath.Dir(exe), "..", "..", "runtime", runtime.GOARCH)
+		if st, e := os.Stat(filepath.Join(dir, "bin", "ffmpeg")); e == nil && !st.IsDir() {
+			return filepath.Clean(dir)
+		}
+	}
+	return ""
+}
 
 func interfaceName(host string) (string, error) {
 	interfaces, err := net.Interfaces()
