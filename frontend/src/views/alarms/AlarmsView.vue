@@ -16,10 +16,10 @@
   </section>
  </div>
  <section class="glass alarm-help"><strong>铃声与停止方式</strong><p>可从电脑或手机上传音乐，也可通过飞牛选择 NAS 中的文件并授权。已导入音乐保存在 <b>miair-plus / ringtones</b>，可从铃声库复用。支持 MP3、WAV、FLAC、OGG、AAC，单文件最大 100 MB。</p><p>铃声播放一次，播完或到最长时长后结束。可在此页停止或延后，也可尝试“小爱同学，停止播放”或机身暂停键，语音／按键效果取决于音箱型号。本功能独立于小爱内置闹钟，需要 NAS 与音箱在线。</p><div class="alarm-calendar"><span>中国大陆调休日历：{{Object.keys(calendar).join('、')||'未载入'}}</span><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(false)">更新今年</n-button><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(true)">获取明年</n-button></div><p>法定工作日含周末补班；休息日含周末与放假调休；仅节假日只在公告放假日期响铃。日历未收录的年份不会猜测。</p></section>
- <n-modal v-model:show="show" preset="card" :title="form.id?'编辑闹钟':'新建闹钟'" class="alarm-modal" :mask-closable="!busy" :closable="!busy">
+ <n-modal v-model:show="show" preset="card" :title="form.id?'编辑闹钟':'新建闹钟'" class="alarm-modal" :style="{width:'min(560px, calc(100vw - 32px))',maxHeight:'calc(100dvh - 48px)'}" :content-style="{overflowY:'auto',minHeight:'0'}" :mask-closable="!busy" :closable="!busy">
   <n-form label-placement="top" :disabled="busy">
    <n-form-item label="名称"><n-input v-model:value="form.name" maxlength="32" placeholder="例如：起床时间"/></n-form-item>
-   <div class="alarm-fields"><n-form-item label="响铃时间"><input v-model="form.time" class="alarm-time-input" type="time" aria-label="响铃时间" required/></n-form-item><n-form-item label="重复规则"><n-select v-model:value="form.rule" :options="rules"/></n-form-item></div>
+   <div class="alarm-fields"><n-form-item label="响铃时间"><div class="alarm-time-field"><n-time-picker :formatted-value="form.time" format="HH:mm" value-format="HH:mm" :use12-hours="false" :clearable="false" :actions="['confirm']" :disabled="busy" size="large" placeholder="选择响铃时间" :theme-overrides="timePickerTheme" @update:formatted-value="setTime"/><span class="alarm-time-hint">24 小时制 · 小时 : 分钟</span></div></n-form-item><n-form-item label="重复规则"><n-select v-model:value="form.rule" :options="rules"/></n-form-item></div>
    <n-form-item v-if="form.rule==='weekly'" label="星期"><n-checkbox-group v-model:value="selectedDays"><n-space><n-checkbox v-for="(day,i) in dayNames" :key="day" :value="i" :label="day"/></n-space></n-checkbox-group></n-form-item>
    <n-form-item label="时区"><n-select v-model:value="form.timezone" :options="[{label:'北京时间 · Asia/Shanghai',value:'Asia/Shanghai'}]"/></n-form-item>
    <n-form-item label="目标音箱"><n-select v-model:value="form.speaker" :options="speakerOptions" placeholder="请选择已启用的音箱"/></n-form-item>
@@ -29,7 +29,7 @@
    <p v-if="busy">正在保存并准备铃声，请稍候…</p><n-button type="primary" block :loading="busy" :disabled="uploading||nasBusy" @click="save">保存闹钟</n-button>
   </n-form>
  </n-modal>
- <n-modal v-model:show="picker" preset="card" title="选择 NAS 铃声" class="alarm-modal">
+ <n-modal v-model:show="picker" preset="card" title="选择 NAS 铃声" class="alarm-modal" :style="{width:'min(560px, calc(100vw - 32px))',maxHeight:'calc(100dvh - 48px)'}" :content-style="{overflowY:'auto',minHeight:'0'}">
   <p>miair-plus / ringtones / {{folder==='.'?'':folder}}</p><n-button v-if="folder!=='.'" size="small" @click="openFiles(parentFolder)">返回上一级</n-button>
   <n-alert v-if="fileError" type="warning">{{fileError}}</n-alert>
   <div class="alarm-file-list"><n-button v-for="file in files" :key="file.path" quaternary block @click="pick(file)">{{file.directory?'文件夹 · ':''}}{{file.name}}</n-button><p v-if="!files.length&&!fileError">目录里还没有音频。请先通过飞牛文件管理复制铃声，再刷新。</p></div>
@@ -38,7 +38,7 @@
 </template>
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
-import {NAlert,NButton,NCheckbox,NCheckboxGroup,NForm,NFormItem,NIcon,NInput,NInputNumber,NModal,NPopconfirm,NSelect,NSpace,NSwitch,NTag,useMessage} from 'naive-ui'
+import {NAlert,NButton,NCheckbox,NCheckboxGroup,NForm,NFormItem,NIcon,NInput,NInputNumber,NModal,NPopconfirm,NSelect,NSpace,NSwitch,NTag,NTimePicker,useMessage} from 'naive-ui'
 import {AlarmOutline} from '@vicons/ionicons5'
 import http from '@/api/http'
 import {TrimApp,type AppAuthResult} from '@trimjs/web-app'
@@ -55,6 +55,8 @@ const rules=[{label:'法定工作日（含调休补班）',value:'workday'},{lab
 const selectedDays=computed({get:()=>dayNames.map((_,i)=>i).filter(i=>form.days&(1<<i)),set:(days:(string|number)[])=>{form.days=days.reduce<number>((mask,d)=>mask|(1<<Number(d)),0)}})
 const parentFolder=computed(()=>folder.value.split('/').slice(0,-1).join('/')||'.')
 const speakerOptions=computed(()=>speakers.value.filter(s=>s.enabled).map(s=>({label:s.dlna_name||s.name,value:s.did})))
+const timePickerTheme={itemHeight:'44px',itemWidth:'88px',itemFontSize:'18px',itemBorderRadius:'8px',borderRadius:'12px'}
+function setTime(value:string|null){if(value&&/^([01]\d|2[0-3]):[0-5]\d$/.test(value))form.time=value}
 const states:Record<string,string>={starting:'正在连接',ringing:'正在响铃',stopping:'正在停止',stop_failed:'停止未确认'}
 const active=(state:string)=>['starting','ringing','stopping','stop_failed'].includes(state)
 const audioName=(path:string)=>path.split('/').pop()?.replace(/^[a-f0-9]{12}-/,'')||''
@@ -102,5 +104,5 @@ onMounted(async()=>{window.addEventListener('message',nasMessage);window.addEven
 onUnmounted(()=>{uploadAbort?.abort();if(timer)clearInterval(timer);window.removeEventListener('message',nasMessage);window.removeEventListener('storage',nasStorage);cancelNAS()})
 </script>
 <style scoped>
-.alarm-toolbar,.alarm-calendar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.alarm-toolbar p{flex:1}.alarm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.alarm-card{padding:23px}.alarm-clock{font-size:40px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.4}.alarm-clock small{display:block;font-size:12px;letter-spacing:0;color:var(--accent);margin:4px 0 10px}.alarm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.alarm-sound{overflow-wrap:anywhere}.alarm-next{font-size:11px;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.alarm-help{padding:22px;margin-top:24px}.alarm-help strong{font-size:14px}.alarm-help p{margin:8px 0;font-size:12px}.alarm-calendar{font-size:12px;margin:15px 0 0}.alarm-error{color:#e45656}.alarm-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.alarm-music-source{width:100%}.alarm-music-source .alarm-actions{margin-top:8px}.alarm-file-choice{display:flex;gap:10px;width:100%}.alarm-time-input{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:9px;width:100%}.alarm-file-list{max-height:300px;overflow:auto;margin:12px 0}.alarm-file-list .n-button{justify-content:flex-start}.alarm-modal{width:min(560px,calc(100vw - 32px))!important}.alarm-fields .n-input-number{width:100%}@media(max-width:760px){.alarm-grid{grid-template-columns:1fr}.alarm-fields{grid-template-columns:1fr}.alarm-clock{font-size:34px}}
+.alarm-toolbar,.alarm-calendar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.alarm-toolbar p{flex:1}.alarm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.alarm-card{padding:23px}.alarm-clock{font-size:40px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.4}.alarm-clock small{display:block;font-size:12px;letter-spacing:0;color:var(--accent);margin:4px 0 10px}.alarm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.alarm-sound{overflow-wrap:anywhere}.alarm-next{font-size:11px;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.alarm-help{padding:22px;margin-top:24px}.alarm-help strong{font-size:14px}.alarm-help p{margin:8px 0;font-size:12px}.alarm-calendar{font-size:12px;margin:15px 0 0}.alarm-error{color:#e45656}.alarm-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.alarm-music-source{width:100%}.alarm-music-source .alarm-actions{margin-top:8px}.alarm-file-choice{display:flex;gap:10px;width:100%}.alarm-time-field{width:100%}.alarm-time-field :deep(.n-time-picker){width:100%}.alarm-time-field :deep(.n-input__input-el){font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:2px}.alarm-time-hint{display:block;margin-top:8px;font-size:12px;color:var(--muted)}.alarm-file-list{max-height:300px;overflow:auto;margin:12px 0}.alarm-file-list .n-button{justify-content:flex-start}.alarm-fields .n-input-number{width:100%}@media(max-width:760px){.alarm-grid{grid-template-columns:1fr}.alarm-fields{grid-template-columns:1fr}.alarm-clock{font-size:34px}}
 </style>
