@@ -9,6 +9,16 @@ esac
 APP="${TRIM_APPDEST:?}/bin/$ARCH/miair-plus"
 STATE="${TRIM_PKGVAR:?}"
 PIDFILE="$STATE/app.pid"
+startup_exit() {
+  result=$?
+  if [ "$result" -ne 0 ]; then
+    message="MiAir Plus 启动失败，请检查 $STATE/startup.log 和 $STATE/app.log"
+    printf '%s\n' "$message" >&2
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+      printf '%s\n' "$message" > "$TRIM_TEMP_LOGFILE" || :
+    fi
+  fi
+}
 export MIAIR_AUDIO_DIR="$TRIM_APPDEST/runtime/$ARCH"
 export PATH="$TRIM_APPDEST/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/trim/bin:$PATH"
 running() {
@@ -23,11 +33,21 @@ running() {
 case "${1:-}" in
   start)
     running && exit 0
+    # Capture preparation failures too, before the Go process can open its log.
+    trap startup_exit EXIT
+    mkdir -p "$STATE"
+    [ ! -f "$STATE/startup.log" ] || mv -f "$STATE/startup.log" "$STATE/startup.previous.log"
+    exec >>"$STATE/startup.log" 2>&1
+    printf '%s Preparing MiAir Plus\n' "$(date -Iseconds)"
     mkdir -p "$STATE/data"
     # Root is used only for preparation. The HTTP service and audio receiver
     # run as the package account; only the clock helper can bind UDP 319/320.
     if [ "$(id -u)" = 0 ]; then
       chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" "$STATE" "$STATE/data"
+      # Earlier packages ran as root. Migrate private state, without following
+      # symlinks or touching runtime binaries and their clock capability.
+      find -P "$STATE/data" -xdev -type d -exec chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" {} + -exec chmod 700 {} +
+      find -P "$STATE/data" -xdev -type f -exec chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" {} + -exec chmod 600 {} +
       if [ -f "$MIAIR_AUDIO_DIR/bin/nqptp" ]; then
         if command -v setcap >/dev/null 2>&1; then
           setcap cap_net_bind_service=ep "$MIAIR_AUDIO_DIR/bin/nqptp" || echo 'AirPlay 2 clock capability setup failed' >&2
@@ -39,6 +59,7 @@ case "${1:-}" in
     [ -x "$APP" ] || { echo 'MiAir Plus binary missing or not executable' >&2; exit 1; }
     # Rotate on each start. In-process history is independently bounded.
     [ ! -f "$STATE/app.log" ] || mv -f "$STATE/app.log" "$STATE/app.previous.log"
+    rm -f "$PIDFILE"
     if [ "$(id -u)" = 0 ]; then
       runuser -u "${TRIM_USERNAME:-miair-plus}" -- sh -c 'umask 077; nohup "$1" --data "$2/data" --listen :8310 >"$2/app.log" 2>&1 & echo "$!" >"$2/app.pid"' sh "$APP" "$STATE"
     else
@@ -47,6 +68,7 @@ case "${1:-}" in
     fi
     sleep 1
     running || { echo 'MiAir Plus failed; inspect app.log' >&2; exit 1; }
+    printf '%s Started PID %s\n' "$(date -Iseconds)" "$pid"
     ;;
   stop)
     if running; then

@@ -17,7 +17,8 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Print(err)
+		// Fatal errors must remain available when the web UI cannot start.
+		fmt.Fprintln(os.Stderr, "MiAir Plus startup/exit error:", err)
 		os.Exit(1)
 	}
 }

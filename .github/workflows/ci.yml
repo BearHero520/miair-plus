@@ -22,6 +22,7 @@ jobs:
       - run: go vet ./... && go test -race -count=1 ./...
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/miair-plus-linux-amd64 ./cmd/miair-plus
       - run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/miair-plus-linux-arm64 ./cmd/miair-plus
+      - run: sudo sh scripts/test-fpk-lifecycle.sh
       - uses: actions/upload-artifact@v4
         with:
           name: linux-binaries
