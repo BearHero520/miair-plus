@@ -116,6 +116,11 @@ func (e *AlarmEngine) Run(ctx context.Context) {
 				}
 				if claimed {
 					if err = e.Start(ctx, a); err != nil {
+						e.mu.Lock()
+						if current := e.runs[a.ID]; current == nil || current.State == "ended" || current.State == "failed" {
+							e.runs[a.ID] = &alarmRun{Alarm: a, State: "failed", Error: err.Error()}
+						}
+						e.mu.Unlock()
 						diagnostics.Event("warn", "闹钟", err.Error(), map[string]string{"闹钟": a.Name})
 					}
 				}
@@ -427,7 +432,8 @@ func (e *AlarmEngine) Save(ctx context.Context, a config.Alarm) error {
 	a.Audio = old.Audio
 	a.LastFire = old.LastFire
 	a.SnoozeAt = 0
-	if old.Sound != a.Sound || old.Minutes != a.Minutes || !validAudioID(a.Audio) {
+	st, cacheErr := os.Stat(filepath.Join(e.store.Directory(), "alarm-audio", a.Audio+".mp3"))
+	if old.Sound != a.Sound || old.Minutes != a.Minutes || !validAudioID(a.Audio) || cacheErr != nil || st.Size() == 0 {
 		audio, err := e.importSound(ctx, a.Sound, a.Minutes)
 		if err != nil {
 			return err
