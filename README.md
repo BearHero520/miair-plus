@@ -1,78 +1,68 @@
-# MiAir Plus · Go
+# MiAir Plus
 
-将小爱音箱接入 DLNA / AirPlay 音频投送的原生桥接服务，提供简洁的磨砂风格管理页面和飞牛 fnOS 安装包。Go 主服务配套 Shairport Sync、NQPTP 与 FFmpeg 原生组件，不依赖 Docker 或 Python。
+为小爱音箱扩展 DLNA、AirPlay 音乐投送与自定义音乐闹钟，配备简洁的磨砂风格管理界面，支持飞牛 fnOS。
 
-**当前为 `2.0.0-alpha.6` 预览版。已做协议与解码自动测试，已在 x86_64 fnOS 验证升级与启动；尚未完成真实小爱音箱、QQ 音乐／网易云／OPPO／Apple 发送端的实机验收。不要把预览版当作全型号兼容的稳定版。**
+[下载安装包](https://github.com/BearHero520/miair-plus/releases) · [兼容与测试说明](docs/COMPATIBILITY.md)
 
-## alpha.6 更新
+## 功能
 
-- 左侧导航使用 Element Plus 纯蓝选中背景，去掉装饰条。
-- 新增 NAS 音频闹钟：指定星期、法定工作日（含调休）、休息日（周末和节假日）及仅法定节假日；显示接下来三次响铃日期。
-- 两种音乐来源：电脑/手机上传，或通过飞牛原生文件选择器选取并授权 NAS 音频。已导入音乐自动存入 `miair-plus/ringtones`，可在铃声库复用。支持 MP3/WAV/FLAC/OGG/AAC。保存时转为 MP3，最多 10 分钟，响铃时不重新转码。每次播放一次，短音频播完即结束。
-- 支持立即试听、停止、延后 5 分钟及最长时长停止。小爱的语音停止及机身暂停键属于普通播放控制，实际型号兼容性需实测；没有拦截或替换小爱自带闹钟。
-- 原播放结束或用户停止后，不会通过自动重播拉起；较早的闹钟停止请求不能中断新的 DLNA/AirPlay 会话。停止接口失败会保留错误与重试入口，有限长度音频作为兜底。
-- 调休日历内置 2026 年数据，来自国务院公告及 MIT 许可的 [holiday-cn](https://github.com/NateScarlet/holiday-cn)。每天尝试更新当前及次年数据，亦可手动更新；断网保留缓存，尚无完整公告的年份暂停法定日历规则并明确提示。2027 年公告目前尚未收录。
-- 定时记录在触发前持久化；重启不补响超过一分钟的过期任务，不重复触发同一时刻。NAS 必须保持在线。
+### 音乐投送
 
-## alpha.5 更新
+- **DLNA 投送**：通过支持 DLNA 音频输出的音乐 App，将音乐投送到小爱音箱。
+- **AirPlay 接收**：支持传统 AirPlay，提供可选的 AirPlay 2 预览功能；可在设置中选择 AirPlay 2 的目标音箱。
+- **音箱管理**：米家扫码登录、刷新设备、启用音箱、自定义投送名称，查看服务与同步状态。
+- **内置音频处理**：安装包自带 FFmpeg，支持音频解码与格式转换。
+- **投送稳定性**：流式音频代理、连接恢复和操作状态追踪；播放、暂停与切歌直接在音乐 App 中操作。
 
-- 修复从 root 运行的旧版本升级后，配置权限导致应用无法启动。自动迁移私有数据权限，保留账号与音箱设置。
-- 启动准备阶段写入 `startup.log`，失败原因位置通过飞牛错误提示展示；致命错误写入 `app.log`。
+### 音乐闹钟
 
-## alpha.4 更新
+- **上传音乐**：从电脑或手机上传音频，显示上传进度。
+- **从 NAS 选择**：使用飞牛文件选择器，选择并授权已有音乐文件。
+- **铃声库**：已导入的音乐保存在 `miair-plus/ringtones`，可重复选用。
+- **灵活重复规则**：支持指定星期、法定工作日（含调休补班）、休息日（周末与放假日）以及仅法定节假日。
+- **响铃设置**：选择目标音箱、时间、音量与最长播放时长，预览接下来三次响铃日期。
+- **停止与延后**：支持试听、停止和延后 5 分钟；页面显示执行结果与失败原因。
 
-- 左侧导航、右侧工作区，Element Plus 主题蓝（`#409EFF`）与半透明磨砂表面；手机保留紧凑左侧导航。
-- 首页只保留三项状态与简短音箱列表。设置页明确显示内置 FFmpeg 状态，自定义路径折叠到高级设置。
-- 日志记录投送操作、音箱执行耗时与失败原因、名称广播及连接恢复。支持筛选、暂停刷新、脱敏诊断报告下载。
-- 最近 1000 条事件在重启后恢复，磁盘按 2 MiB 文件轮转并保留一个备份。
+支持 MP3、WAV、FLAC、OGG、AAC，单文件最大 100 MB。保存时提前准备铃声，每次播放一次，播完或达到设定时长后结束，最长 10 分钟。
 
-## 黑屏修复与通用安装包
+法定日历按中国大陆安排执行，内置 2026 年数据，支持自动与手动更新。断网时使用已有缓存；尚未收录的年份暂停法定日历规则并提示，不影响指定星期的闹钟。
 
-`alpha.2` 使用 `go:embed all:dist` 打包以下划线开头的前端辅助模块，修复 `_plugin-vue_export-helper` 返回 404 引起的黑屏。升级后请强制刷新页面（Ctrl+Shift+R）；入口 HTML 不再缓存。通用包内同时携带两个架构的 Go 二进制，由启动脚本按 CPU 自动选择。
+闹钟需要 NAS 与音箱在线。本功能独立于小爱自带闹钟；语音“停止播放”和机身暂停键的效果取决于音箱型号。
 
-## 这次改了什么
+### 管理界面与日志
 
-- 管理 API、小米账号通信、DLNA、传统 RAOP 接收及服务管理使用 Go；AirPlay 2 协议交给 Shairport Sync 5.5.1，时钟使用 NQPTP 1.2.8，音频处理使用 FFmpeg 8.1。
-- 前端保留 Vue 3，编译后嵌入 Go 二进制，无需在 NAS 安装 Node.js。
-- 名称保存先原子写入本地，再在后台更新广播，不等待小米云。传统 AirPlay 改名不重建音频会话；AirPlay 2 改名和切换目标会在后台重建接收组件。
-- 每台音箱的播放命令串行执行，新操作取消旧请求，旧返回不能覆盖新状态。云请求超时不伪装为“停止”。
-- DLNA 使用共享 SSDP 发现端口、UPnP 事件订阅和 HTTP Range 流式代理；音频不整首载入内存。
-- RAOP 提供 UDP / TCP 音频、RSA / AES、限量乱序重排、丢包请求和固定大小音频缓冲。
-- 管理页面移除手动播放控制，播放、暂停、切歌从音乐 App 操作。
+- 左侧导航、右侧页面，主题蓝搭配半透明磨砂界面，支持深浅色外观。
+- 精简总览，集中查看音箱与服务状态。
+- 日志展示投送操作、执行耗时、失败原因、名称广播与连接恢复。
+- 支持日志筛选、暂停刷新和脱敏诊断报告下载；启动失败保留排查日志。
+
+## 安装与使用
+
+1. 从 [Releases](https://github.com/BearHero520/miair-plus/releases) 下载 `all.fpk` 通用安装包，x86_64 与 ARM64 使用同一文件。
+2. 在飞牛应用中心选择“手动安装”，安装后打开管理页面并创建管理员账号。
+3. 进入“账号”完成米家扫码登录，在“音箱”中刷新并启用需要的设备。
+4. 在“设置”中确认 NAS 局域网 IPv4 地址，让手机、NAS 和音箱处于同一局域网。
+5. 在音乐 App 的 DLNA / AirPlay 输出列表中选择音箱。使用 AirPlay 2 时，先在设置中开启并选择目标音箱。
+6. 设置闹钟时，进入“闹钟 → 新建闹钟”，选择音乐来源、音箱、时间与重复规则，然后保存。
+
+管理页面默认端口为 `8310`，DLNA 与音频代理端口为 `8311`。局域网需要允许设备发现与组播通信，避免客户端隔离或端口冲突。投送名称更改后，音乐 App 可能需要重新打开设备列表以刷新缓存。
 
 ## 兼容范围
 
-| 项目 | 当前范围 |
+| 项目 | 说明 |
 | --- | --- |
-| NAS 架构 | 单个通用 FPK 内含 Linux amd64 / arm64，启动时自动选择；ARM32 不支持 |
-| DLNA | SSDP、AVTransport、RenderingControl、ConnectionManager、GENA |
-| QQ 音乐、网易云 | 实现其可使用的通用 DLNA 音频接口；具体 App 版本需实测 |
-| OPPO 系统投送 | 仅当发送端提供 DLNA **音频**输出；不是 Miracast / 屏幕镜像接收器 |
-| AirPlay | 传统 Go RAOP 接收；可选 Shairport Sync AirPlay 2 原生接收，默认关闭以便逐步验收 |
-| AirPlay 2 入口 | 同一 NAS IP 使用一个接收实例，设置中选择目标音箱；其余音箱保留传统 AirPlay，全部音箱保留 DLNA |
-| 暂不支持 | 屏幕镜像、视频接收；不保证经过小米云和 HTTP 桥接后的多房间精确同步 |
-| 小米音箱 | 小米云能列出的设备；提供两种 MiNA 播放接口与兼容模式，不承诺全型号 |
-| 解码与拖动进度 | 通用包内置精简音频 FFmpeg；也可手动指定兼容的系统 FFmpeg |
+| NAS 架构 | Linux x86_64 / ARM64 通用 FPK；不支持 ARM32 |
+| 小米音箱 | 支持小米云可发现的设备，具体型号的播放能力需实测 |
+| QQ 音乐、网易云音乐 | 使用 App 提供的 DLNA 音频投送入口，兼容性随版本与设备而异 |
+| OPPO 系统投送 | 需要发送端提供 DLNA 音频输出 |
+| AirPlay 2 | 预览功能，单个接收实例选择一个目标音箱；需要系统 D-Bus、Avahi 及可用的 TCP 7000、UDP 319/320 端口 |
+| 音频投送范围 | 不支持屏幕镜像、视频接收，不保证多房间精确同步 |
 
-AirPlay 2 需要 NAS 系统已有 D-Bus 与 Avahi 服务，以及空闲的 TCP 7000、UDP 319/320。安装脚本只为 NQPTP 赋予低端口绑定能力，Go 服务与 Shairport Sync 以应用用户运行。组件或依赖不可用会显示错误，DLNA 独立运行；后台默认每 30 秒尝试恢复。安装包不会修改系统 Avahi 配置，也不会停止占用端口的其他应用。
+当前为预览版。已在 x86_64 飞牛 NAS 验证启动、NAS 文件授权、音乐导入、保存与转码；实际投送、闹钟响铃和语音停止仍需按音箱型号与发送端验证。详细状态见 [兼容与测试说明](docs/COMPATIBILITY.md)。
 
-## 安装到飞牛
+## 开发与构建
 
-1. 从 Releases 下载 `miair-plus-2.0.0-alpha.6-all.fpk`，x86_64 与 ARM64 使用同一个安装包。
-2. 停止旧版 MiAir / MiAir Plus，避免 8310 / 8311 端口冲突。预览版使用独立应用 ID `miair-plus`，不会覆盖旧 `airisland` 数据。
-3. 在飞牛应用中心手动安装，打开管理页面，创建自己的管理员账号。
-4. 在“账号”中使用米家扫码，刷新设备，选择音箱并保存。
-5. 在“设置”中确认 NAS 局域网 IPv4。手机、NAS 和音箱需在同一局域网，路由器不能隔离组播或客户端。
-6. 在“设置”确认 FFmpeg 已检测到。通用包优先使用自带版本；想使用 AirPlay 2 时打开对应开关，选择已启用的目标音箱，保存并等待“原生接收组件已就绪”。这代表服务就绪，真实投送还需在手机上验证。
-7. 在音乐 App 的 DLNA / AirPlay 音频输出列表选择音箱。
-
-管理端口默认 TCP 8310，DLNA 与音频代理 TCP 8311，SSDP UDP 1900，mDNS UDP 5353。RAOP 每台启用音箱使用动态 TCP 端口及每个会话的 UDP 音频／控制／时钟端口；防火墙需允许可信局域网访问这些端口。
-
-修改名称后页面会显示后台同步状态，发送端的旧名称缓存可能需要关闭并重新打开投送列表。改变 NAS IP 或音频端口会重建服务并中断当前投送。
-
-## 从源码运行
-
-需要 Go 1.27.1+、Node.js 22+；传统 AirPlay 需要 FFmpeg。AirPlay 2 还需要原生运行库，将 `MIAIR_AUDIO_DIR` 指向对应架构的运行库目录（内含 bin、lib）。
+需要 Go 1.27.1+、Node.js 22+。音频处理需要 FFmpeg；AirPlay 2 使用 Shairport Sync 与 NQPTP，将 `MIAIR_AUDIO_DIR` 指向对应架构的原生运行库目录（含 `bin`、`lib`）。
 
 ```sh
 cd frontend
@@ -86,22 +76,12 @@ go build -trimpath -o miair-plus ./cmd/miair-plus
 ./miair-plus --data ./data --listen :8310
 ```
 
-Windows 开发可用 `Copy-Item frontend/dist/* internal/web/dist -Recurse -Force` 替代 `cp`。`--no-discovery` 关闭组播广播，适合本地页面开发。
+Windows 可用 `Copy-Item frontend/dist/* internal/web/dist -Recurse -Force` 替代 `cp`。`--no-discovery` 可关闭组播广播，用于本地页面开发。
 
-原生 FPK：安装官方 [fnpack](https://developer.fnnas.com/docs/cli/fnpack)，运行 GitHub Actions 的 `Build native AirPlay 2 runtime`，取出两个架构的 `airplay2-runtime-*.tar.xz`，分别解压到 `build/native/amd64` 和 `build/native/arm64`。Windows 下运行 `scripts/build.ps1 -Fnpack <fnpack.exe路径> -RuntimeDir <build/native绝对路径>`；Linux 下设置 `MIAIR_RUNTIME_DIR` 后运行 `scripts/build.sh`。打包时校验每个运行库文件的 SHA-256 与 ELF 架构。输出在 `dist/`。
+构建 FPK：安装官方 [fnpack](https://developer.fnnas.com/docs/cli/fnpack)，运行 GitHub Actions 的 `Build native AirPlay 2 runtime`，将两个架构的运行库分别解压到 `build/native/amd64` 与 `build/native/arm64`。Windows 使用 `scripts/build.ps1 -Fnpack <fnpack.exe路径> -RuntimeDir <build/native绝对路径>`；Linux 设置 `MIAIR_RUNTIME_DIR` 后运行 `scripts/build.sh`。安装包输出到 `dist/`，原生运行库以 glibc 2.36 为基线。
 
-原生组件在 CI 的一次性 Debian 12 构建环境中编译，NAS 运行时不需要容器。运行库以 glibc 2.36 为基线，需要在不同 fnOS 版本上实测。对应第三方源代码作为 Release 的 `airplay2-sources-*.tar.xz` 一起提供，FPK 内保留许可证和本项目 `source.tar.gz`。
+## 数据与许可
 
-## 数据与回退
+应用配置保存在数据目录中；飞牛卸载前可按需备份 `${TRIM_PKGVAR}/data`。配置包含小米登录凭据，请勿公开上传。
 
-管理员密码使用 bcrypt；会话具有到期时间，修改密码会使旧会话失效。小米凭据只保存在所选数据目录的 `miair-plus.json` 中，Unix 权限为 0600；请妥善保护该目录。不要上传配置、Cookie、令牌或日志中的私密内容。
-
-旧版数据不会自动导入；迁移时重新扫码并选择音箱。回退时先停止 Go 版，再启动旧版即可。卸载前按需备份 `${TRIM_PKGVAR}/data`。
-
-## 已知边界与验收
-
-见 [兼容与测试说明](docs/COMPATIBILITY.md)。设置仅提供本版实现的功能；旧版的歌词匹配、通知推送、验证码交互登录、被打断后强制续播未包含在本次重写中。
-
-## 来源与许可
-
-GPL-3.0。项目参考 [deerwan/miair-next](https://github.com/deerwan/miair-next) 与 [KiriChen-Wind/MiAir](https://github.com/KiriChen-Wind/MiAir)，不是原项目官方版本。保留了前端基础、部分协议描述和公开协议常量，并重写运行后端；不是“全部从零原创”。详细说明见 [UPSTREAM.md](UPSTREAM.md)。
+项目采用 GPL-3.0 许可证。致谢 [miair-next](https://github.com/deerwan/miair-next)、[MiAir](https://github.com/KiriChen-Wind/MiAir) 及相关开源组件，来源与许可详见 [UPSTREAM.md](UPSTREAM.md)。调休日历使用 [holiday-cn](https://github.com/NateScarlet/holiday-cn) 数据。原生组件对应源码随 Release 提供，安装包内保留相关许可证。
