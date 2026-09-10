@@ -21,8 +21,9 @@ import (
 
 func main() {
 	fnpack := flag.String("fnpack", "fnpack", "official fnpack executable")
+	native := flag.String("runtime-dir", "", "directory containing verified amd64 and arm64 native audio runtimes")
 	flag.Parse()
-	if err := build(*fnpack); err != nil {
+	if err := build(*fnpack, *native); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -156,7 +157,7 @@ func normalizeTar(input []byte, app bool) ([]byte, error) {
 			sum := md5.Sum(b)
 			checksum = hex.EncodeToString(sum[:])
 		}
-		if h.Typeflag == tar.TypeDir || strings.HasPrefix(name, "cmd/") || app && strings.HasPrefix(name, "bin/") {
+		if h.Typeflag == tar.TypeDir || strings.HasPrefix(name, "cmd/") || app && (strings.HasPrefix(name, "bin/") || strings.HasPrefix(name, "runtime/") && strings.Contains(name, "/bin/")) {
 			h.Mode = 0755
 		} else {
 			h.Mode = 0644
@@ -197,7 +198,7 @@ func normalizeTar(input []byte, app bool) ([]byte, error) {
 	}
 	return out.Bytes(), nil
 }
-func build(fnpack string) error {
+func build(fnpack, native string) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -233,6 +234,18 @@ func build(fnpack string) error {
 			return err
 		}
 		for _, arch := range []string{"amd64", "arm64"} {
+			if native == "" {
+				return fmt.Errorf("AirPlay 2 package requires --runtime-dir with both architectures")
+			}
+			runtimeSource := filepath.Join(native, arch)
+			if err = verifyRuntime(runtimeSource, arch); err != nil {
+				return err
+			}
+			for _, dir := range []string{"bin", "lib", "licenses"} {
+				if err = copyTree(filepath.Join(runtimeSource, dir), filepath.Join(stage, "app/runtime", arch, dir)); err != nil {
+					return err
+				}
+			}
 			bin := filepath.Join(stage, "app/bin", arch)
 			if err = os.MkdirAll(bin, 0755); err != nil {
 				return err

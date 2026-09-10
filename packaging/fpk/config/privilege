@@ -1,1 +1,1 @@
-{"defaults":{"run-as":"package"},"username":"miair-plus","groupname":"miair-plus"}
+{"defaults":{"run-as":"root"},"username":"miair-plus","groupname":"miair-plus"}

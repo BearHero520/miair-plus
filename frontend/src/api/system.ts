@@ -10,6 +10,8 @@ export interface SpeakerSetting {
 }
 
 export interface Settings {
+  airplay2_running?: boolean
+  airplay2_error?: string
   version: string
   engine_version: string
   hostname: string

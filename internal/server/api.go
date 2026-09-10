@@ -392,24 +392,27 @@ func (a *API) status() map[string]any {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	s := a.Store.Snapshot()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "go_version": runtime.Version(), "arch": runtime.GOARCH, "dlna_running": running, "renderers_count": count, "hostname": host, "dlna_port": port, "has_account": s.Xiaomi.UserID != "", "logged_in": s.Xiaomi.ServiceToken != "", "uptime_seconds": time.Since(a.started).Seconds(), "memory_mb": float64(memory.Sys) / (1 << 20), "memory_source": "go_runtime", "airplay_enabled": s.AirPlay, "ffmpeg_available": codec}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "go_version": runtime.Version(), "arch": runtime.GOARCH, "dlna_running": running, "renderers_count": count, "hostname": host, "dlna_port": port, "has_account": s.Xiaomi.UserID != "", "logged_in": s.Xiaomi.ServiceToken != "", "uptime_seconds": time.Since(a.started).Seconds(), "memory_mb": float64(memory.Sys) / (1 << 20), "memory_source": "go_runtime", "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_available": codec}
 }
 func (a *API) settings() map[string]any {
+	ap2Running, ap2Error := a.Manager.AirPlay2Info()
 	s := a.Store.Snapshot()
 	_, _, n, running, codec := a.Manager.Info()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "ffmpeg_path": s.FFmpeg, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
 }
 
 type settingsPatch struct {
-	Hostname *string `json:"hostname"`
-	Port     *int    `json:"dlna_port"`
-	AutoPlay *bool   `json:"auto_play_on_set_uri"`
-	Recover  *bool   `json:"auto_restart"`
-	Volume   *int    `json:"default_volume"`
-	AirPlay  *bool   `json:"airplay_enabled"`
-	FFmpeg   *string `json:"ffmpeg_path"`
-	AudioID  *string `json:"default_audio_id"`
-	Speakers map[string]struct {
+	Hostname       *string `json:"hostname"`
+	Port           *int    `json:"dlna_port"`
+	AutoPlay       *bool   `json:"auto_play_on_set_uri"`
+	Recover        *bool   `json:"auto_restart"`
+	Volume         *int    `json:"default_volume"`
+	AirPlay        *bool   `json:"airplay_enabled"`
+	AirPlay2       *bool   `json:"airplay2_enabled"`
+	AirPlay2Target *string `json:"airplay2_target"`
+	FFmpeg         *string `json:"ffmpeg_path"`
+	AudioID        *string `json:"default_audio_id"`
+	Speakers       map[string]struct {
 		Enabled       *bool   `json:"enabled"`
 		Name          *string `json:"dlna_name"`
 		Compatibility *bool   `json:"compatibility_mode"`
@@ -450,6 +453,17 @@ func (a *API) saveSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if p.AirPlay != nil {
 			s.AirPlay = *p.AirPlay
+		}
+		if p.AirPlay2 != nil {
+			s.AirPlay2 = *p.AirPlay2
+		}
+		if p.AirPlay2Target != nil {
+			if *p.AirPlay2Target != "" {
+				if _, ok := s.Speakers[*p.AirPlay2Target]; !ok {
+					return errors.New("AirPlay 2 目标音箱不存在")
+				}
+			}
+			s.AirPlay2Target = *p.AirPlay2Target
 		}
 		if p.FFmpeg != nil {
 			s.FFmpeg = *p.FFmpeg

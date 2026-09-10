@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/BearHero520/miair-plus/internal/airplay"
+	"github.com/BearHero520/miair-plus/internal/airplay2"
 	"github.com/BearHero520/miair-plus/internal/config"
 	"github.com/BearHero520/miair-plus/internal/dlna"
 	"github.com/BearHero520/miair-plus/internal/media"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -25,6 +27,11 @@ type Manager struct {
 	client      *xiaomi.Client
 	renderers   map[string]*dlna.Renderer
 	air         map[string]*airplay.Server
+	ap2         *airplay2.Receiver
+	ap2Key      string
+	ap2Error    string
+	ap2Running  bool
+	ap2Status   *airplay2.Receiver
 	live        map[string]*media.Live
 	names       map[string]string
 	errors      map[string]string
@@ -76,7 +83,11 @@ func findFFmpeg(path string) string {
 		}
 		return ""
 	}
-	for _, candidate := range []string{"ffmpeg", "/usr/bin/ffmpeg", "/usr/trim/bin/ffmpeg", "/var/apps/ffmpeg/target/bin/ffmpeg"} {
+	candidates := []string{"ffmpeg", "/usr/bin/ffmpeg", "/usr/trim/bin/ffmpeg", "/var/apps/ffmpeg/target/bin/ffmpeg"}
+	if dir := airplay2.RuntimeDir(); dir != "" {
+		candidates = append([]string{filepath.Join(dir, "bin/ffmpeg")}, candidates...)
+	}
+	for _, candidate := range candidates {
 		if p, e := exec.LookPath(candidate); e == nil {
 			return p
 		}
@@ -166,6 +177,15 @@ func (m *Manager) Apply() error {
 	m.mu.Lock()
 	m.ffmpeg = ffmpeg
 	m.mu.Unlock()
+	target := airPlay2Target(state)
+	key := ""
+	if target != "" {
+		key = target + "\x00" + state.Speakers[target].DisplayName() + "\x00" + ffmpeg
+	}
+	if m.ap2 != nil && (key != m.ap2Key || !m.ap2.Alive()) {
+		m.ap2.Close()
+		m.ap2 = nil
+	}
 	// Protocol registration may take seconds; API writes return before this worker.
 	for did, r := range m.renderers {
 		sp, exists := state.Speakers[did]
@@ -197,7 +217,7 @@ func (m *Manager) Apply() error {
 			r.Update(sp)
 		}
 		nameError := ""
-		if state.AirPlay && ffmpeg != "" {
+		if state.AirPlay && ffmpeg != "" && did != target {
 			if a := m.air[did]; a != nil {
 				if err = a.Rename(sp.DisplayName()); err != nil {
 					nameError = err.Error()
@@ -219,6 +239,22 @@ func (m *Manager) Apply() error {
 		m.errors[did] = nameError
 		m.mu.Unlock()
 	}
+	ap2Error := ""
+	if target != "" && m.ap2 == nil && !m.noDiscovery {
+		m.ap2, err = airplay2.Start(m.ctx, airplay2.Options{Host: host, Name: state.Speakers[target].DisplayName(), Directory: filepath.Join(m.store.Directory(), "airplay2"), Runtime: airplay2.RuntimeDir(), FFmpeg: ffmpeg, Target: m.Lookup(dlna.UUID(target)), Publish: m.publish})
+		if err != nil {
+			ap2Error = err.Error()
+		} else {
+			m.ap2Key = key
+		}
+	}
+	if state.AirPlay && state.AirPlay2 && target == "" {
+		ap2Error = "请选择一台已启用的音箱并登录小米账号"
+	}
+	m.mu.Lock()
+	m.ap2Error, m.ap2Running = ap2Error, m.ap2 != nil && m.ap2.Alive()
+	m.ap2Status = m.ap2
+	m.mu.Unlock()
 	if !m.noDiscovery {
 		if m.discovery == nil {
 			d := dlna.NewDiscovery(host, state.DLNAPort)
@@ -285,6 +321,10 @@ func (m *Manager) Info() (host string, port, count int, running, codec bool) {
 	return m.host, m.port, len(m.renderers), m.host != "", m.ffmpeg != ""
 }
 func (m *Manager) stop() {
+	if m.ap2 != nil {
+		m.ap2.Close()
+		m.ap2 = nil
+	}
 	for did, a := range m.air {
 		a.Close()
 		delete(m.air, did)
@@ -308,6 +348,38 @@ func (m *Manager) stop() {
 	m.live = map[string]*media.Live{}
 	m.host = ""
 	m.port = 0
+	m.ap2Status = nil
+	m.ap2Running = false
 	m.mu.Unlock()
+}
+func airPlay2Target(s config.State) string {
+	if !s.AirPlay || !s.AirPlay2 || s.Xiaomi.UserID == "" {
+		return ""
+	}
+	if s.AirPlay2Target != "" {
+		if sp, ok := s.Speakers[s.AirPlay2Target]; ok && sp.Enabled {
+			return s.AirPlay2Target
+		}
+		return ""
+	}
+	ids := []string{}
+	for did, sp := range s.Speakers {
+		if sp.Enabled {
+			ids = append(ids, did)
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+func (m *Manager) AirPlay2Info() (bool, string) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.ap2Status != nil {
+		return m.ap2Status.Alive(), m.ap2Status.Error()
+	}
+	return m.ap2Running, m.ap2Error
 }
 func (m *Manager) Close() { m.applyMu.Lock(); defer m.applyMu.Unlock(); m.closed = true; m.stop() }

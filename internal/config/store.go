@@ -37,22 +37,24 @@ type Credentials struct {
 	IssuedAt     int64  `json:"issued_at"`
 }
 type State struct {
-	Version       int                `json:"schema_version"`
-	Username      string             `json:"username"`
-	PasswordHash  string             `json:"password_hash"`
-	Secret        string             `json:"secret"`
-	AuthRevision  int                `json:"auth_revision"`
-	Hostname      string             `json:"hostname"`
-	DLNAPort      int                `json:"dlna_port"`
-	AirPlay       bool               `json:"airplay_enabled"`
-	AutoPlay      bool               `json:"auto_play_on_set_uri"`
-	AutoRecover   bool               `json:"auto_restart"`
-	DefaultVolume int                `json:"default_volume"`
-	CacheMB       int                `json:"cache_mb"`
-	FFmpeg        string             `json:"ffmpeg_path"`
-	AudioID       string             `json:"default_audio_id"`
-	Xiaomi        Credentials        `json:"xiaomi"`
-	Speakers      map[string]Speaker `json:"speakers"`
+	Version        int                `json:"schema_version"`
+	Username       string             `json:"username"`
+	PasswordHash   string             `json:"password_hash"`
+	Secret         string             `json:"secret"`
+	AuthRevision   int                `json:"auth_revision"`
+	Hostname       string             `json:"hostname"`
+	DLNAPort       int                `json:"dlna_port"`
+	AirPlay        bool               `json:"airplay_enabled"`
+	AirPlay2       bool               `json:"airplay2_enabled"`
+	AirPlay2Target string             `json:"airplay2_target"`
+	AutoPlay       bool               `json:"auto_play_on_set_uri"`
+	AutoRecover    bool               `json:"auto_restart"`
+	DefaultVolume  int                `json:"default_volume"`
+	CacheMB        int                `json:"cache_mb"`
+	FFmpeg         string             `json:"ffmpeg_path"`
+	AudioID        string             `json:"default_audio_id"`
+	Xiaomi         Credentials        `json:"xiaomi"`
+	Speakers       map[string]Speaker `json:"speakers"`
 }
 type Store struct {
 	mu    sync.RWMutex
@@ -102,7 +104,8 @@ func clone(s State) State {
 	}
 	return result
 }
-func (s *Store) Snapshot() State { s.mu.RLock(); defer s.mu.RUnlock(); return clone(s.state) }
+func (s *Store) Snapshot() State   { s.mu.RLock(); defer s.mu.RUnlock(); return clone(s.state) }
+func (s *Store) Directory() string { return filepath.Dir(s.path) }
 func (s *Store) Update(fn func(*State) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
