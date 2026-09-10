@@ -1,0 +1,28 @@
+name: Go and frontend checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: npm ci && npm run typecheck && npm run build
+        working-directory: frontend
+      - run: cp -R frontend/dist/. internal/web/dist/
+      - run: go vet ./... && go test -race -count=1 ./...
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o build/miair-plus-linux-amd64 ./cmd/miair-plus
+      - run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o build/miair-plus-linux-arm64 ./cmd/miair-plus
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-binaries
+          path: build/miair-plus-linux-*

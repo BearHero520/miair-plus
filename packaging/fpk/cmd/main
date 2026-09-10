@@ -1,0 +1,40 @@
+#!/bin/sh
+set -eu
+umask 077
+APP="${TRIM_APPDEST:?}/bin/miair-plus"
+STATE="${TRIM_PKGVAR:?}"
+PIDFILE="$STATE/app.pid"
+export PATH="$TRIM_APPDEST/bin:/usr/local/bin:/usr/bin:/bin:/usr/trim/bin:$PATH"
+running() {
+  [ -r "$PIDFILE" ] || return 1
+  pid=$(cat "$PIDFILE")
+  case "$pid" in ''|*[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null || return 1
+  actual=$(readlink "/proc/$pid/exe" 2>/dev/null) || return 1
+  expected=$(readlink -f "$APP") || return 1
+  [ "$actual" = "$expected" ]
+}
+case "${1:-}" in
+  start)
+    running && exit 0
+    mkdir -p "$STATE/data"
+    [ -x "$APP" ] || { echo 'MiAir Plus binary missing or not executable' >&2; exit 1; }
+    # Rotate on each start. In-process history is independently bounded.
+    [ ! -f "$STATE/app.log" ] || mv -f "$STATE/app.log" "$STATE/app.previous.log"
+    nohup "$APP" --data "$STATE/data" --listen :8310 >"$STATE/app.log" 2>&1 &
+    echo "$!" >"$PIDFILE"
+    sleep 1
+    running || { echo 'MiAir Plus failed; inspect app.log' >&2; exit 1; }
+    ;;
+  stop)
+    if running; then
+      kill -TERM "$pid"
+      tries=0
+      while running && [ "$tries" -lt 15 ]; do sleep 1; tries=$((tries + 1)); done
+      if running; then kill -KILL "$pid"; fi
+    fi
+    rm -f "$PIDFILE"
+    ;;
+  status) running && exit 0; exit 3 ;;
+  *) exit 1 ;;
+esac

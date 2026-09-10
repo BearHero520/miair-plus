@@ -1,0 +1,12 @@
+node_modules/
+frontend/dist/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
+build/
+dist/
+data/
+*.log
+*.fpk
+*.exe
+.env
+*.local
