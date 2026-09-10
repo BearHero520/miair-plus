@@ -275,7 +275,7 @@ func build(fnpack, native string) error {
 		if len(matches) != 1 {
 			return fmt.Errorf("fnpack produced %d packages", len(matches))
 		}
-		name := "miair-plus-2.0.0-alpha.6-" + platform + ".fpk"
+		name := "miair-plus-2.0.0-alpha.7-" + platform + ".fpk"
 		target := filepath.Join(out, name)
 		if err = repack(matches[0], target); err != nil {
 			return err

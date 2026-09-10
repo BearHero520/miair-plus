@@ -23,7 +23,7 @@
    <n-form-item label="外观"><n-radio-group v-model:value="app.theme"><n-radio-button value="auto">跟随系统</n-radio-button><n-radio-button value="light">浅色</n-radio-button><n-radio-button value="dark">深色</n-radio-button></n-radio-group></n-form-item>
    <n-space><n-button type="primary" :loading="saving" @click="save">保存设置</n-button><n-button :loading="loading" @click="load">重新读取</n-button></n-space>
   </n-space></n-form></n-spin></n-card>
-  <n-card title="MiAir Plus"><n-text>版本 {{ form.version }}</n-text><a href="https://github.com/BearHero520/miair-plus" target="_blank" rel="noopener noreferrer">项目与使用说明 ↗</a></n-card>
+
  </n-space>
 </template>
 <script setup lang="ts">

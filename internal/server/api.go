@@ -27,7 +27,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.0-alpha.6"
+const Version = "2.0.0-alpha.7"
 
 type API struct {
 	Store    *config.Store
