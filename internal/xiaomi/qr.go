@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/BearHero520/miair-plus/internal/config"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -78,9 +79,20 @@ func (q *QRManager) Start(ctx context.Context) (QRSession, error) {
 }
 func (q *QRManager) set(s *QRSession, state, message string) {
 	q.mu.Lock()
+	previous := s.State
 	s.State = state
 	s.Message = message
 	q.mu.Unlock()
+	if previous != state {
+		level := "info"
+		if state == "failed" {
+			level = "error"
+		}
+		if state == "expired" {
+			level = "warn"
+		}
+		diagnostics.Event(level, "小米账号", message, map[string]string{"扫码状态": state})
+	}
 }
 func (q *QRManager) poll(ctx context.Context, s *QRSession, httpClient *http.Client) {
 	defer s.cancel()
