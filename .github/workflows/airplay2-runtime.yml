@@ -20,17 +20,19 @@ jobs:
         with:
           go-version: stable
       - name: Compile native integration tests
-        run: CGO_ENABLED=0 go test -c -o test-airplay2 ./internal/airplay2
+        run: |
+          CGO_ENABLED=0 go test -c -o test-airplay2 ./internal/airplay2
+          CGO_ENABLED=0 go test -c -o test-airplay ./internal/airplay
       - name: Build against Debian 12
         run: |
           mkdir -p runtime-output
           docker run --rm -v "$PWD:/workspace:ro" -v "$PWD/runtime-output:/out" debian:bookworm bash /workspace/scripts/build-airplay2.sh
       - name: Test receiver as unprivileged user
-        run: docker run --rm -v "$PWD:/workspace:ro" -v "$PWD/test-airplay2:/test-airplay2:ro" -v "$PWD/runtime-output:/out" debian:bookworm bash /workspace/scripts/test-airplay2.sh
+        run: docker run --rm -v "$PWD:/workspace:ro" -v "$PWD/test-airplay2:/test-airplay2:ro" -v "$PWD/test-airplay:/test-airplay:ro" -v "$PWD/runtime-output:/out" debian:bookworm bash /workspace/scripts/test-airplay2.sh
       - name: Collect runtime and corresponding sources
         run: |
-          sudo tar -C runtime-output -cJf airplay2-runtime-${{ matrix.arch }}.tar.xz bin lib licenses SHA256SUMS
-          sudo tar -C runtime-output -cJf airplay2-sources-${{ matrix.arch }}.tar.xz sources licenses
+          sudo env XZ_OPT="-T0 -1" tar -C runtime-output -cJf airplay2-runtime-${{ matrix.arch }}.tar.xz bin lib licenses SHA256SUMS
+          sudo env XZ_OPT="-T0 -1" tar -C runtime-output -cJf airplay2-sources-${{ matrix.arch }}.tar.xz sources licenses
       - uses: actions/upload-artifact@v4
         with:
           name: airplay2-${{ matrix.arch }}

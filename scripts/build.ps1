@@ -1,4 +1,4 @@
-param([string]$Fnpack = 'fnpack')
+param([string]$Fnpack = 'fnpack', [Parameter(Mandatory=$true)][string]$RuntimeDir)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 Push-Location (Join-Path $root 'frontend')
@@ -15,6 +15,6 @@ try {
   Copy-Item -Path 'frontend/dist/*' -Destination 'internal/web/dist' -Recurse -Force
   go test ./...
   if ($LASTEXITCODE) { throw 'Go tests failed' }
-  go run ./cmd/package --fnpack $Fnpack
+  go run ./cmd/package --fnpack $Fnpack --runtime-dir $RuntimeDir
   if ($LASTEXITCODE) { throw 'FPK build failed' }
 } finally { Pop-Location }

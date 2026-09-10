@@ -10,3 +10,4 @@ avahi-daemon --daemonize --no-chroot
 useradd --create-home miair-test
 setcap cap_net_bind_service=ep /out/bin/nqptp
 runuser -u miair-test -- env TEST_AIRPLAY2_RUNTIME=/out TEST_FFMPEG=/out/bin/ffmpeg /test-airplay2 -test.v -test.timeout=45s
+runuser -u miair-test -- env TEST_FFMPEG=/out/bin/ffmpeg /test-airplay -test.v -test.timeout=60s

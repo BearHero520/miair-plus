@@ -53,7 +53,7 @@ func readArchive(t *testing.T, b []byte) (map[string][]byte, map[string]int64) {
 	return files, modes
 }
 func TestUniversalArchivePermissionsAndChecksum(t *testing.T) {
-	app := archive(t, map[string][]byte{"bin/amd64/miair-plus": []byte("amd64 fixture"), "bin/arm64/miair-plus": []byte("arm64 fixture")})
+	app := archive(t, map[string][]byte{"bin/amd64/miair-plus": []byte("amd64 fixture"), "bin/arm64/miair-plus": []byte("arm64 fixture"), "runtime/amd64/bin/shairport-sync": []byte("#!/bin/sh\n"), "runtime/arm64/bin/nqptp": []byte("ELF"), "runtime/amd64/lib/libtest.so": []byte("library")})
 	fpk := archive(t, map[string][]byte{"app.tgz": app, "manifest": []byte("platform=all\r\nchecksum=old\r\n"), "cmd/main": []byte("#!/bin/sh\r\nexit 0\r\n")})
 	normalized, e := normalizeTar(fpk, false)
 	if e != nil {
@@ -68,6 +68,9 @@ func TestUniversalArchivePermissionsAndChecksum(t *testing.T) {
 		t.Fatal("checksum not refreshed")
 	}
 	_, modes = readArchive(t, files["app.tgz"])
+	if modes["runtime/amd64/bin/shairport-sync"] != 0755 || modes["runtime/arm64/bin/nqptp"] != 0755 || modes["runtime/amd64/lib/libtest.so"] != 0644 {
+		t.Fatal("invalid native runtime permissions")
+	}
 	for _, arch := range []string{"amd64", "arm64"} {
 		if modes["bin/"+arch+"/miair-plus"] != 0755 {
 			t.Fatal("missing executable bit", arch)
