@@ -20,6 +20,9 @@ startup_exit() {
   fi
 }
 export MIAIR_AUDIO_DIR="$TRIM_APPDEST/runtime/$ARCH"
+if [ -n "${TRIM_DATA_SHARE_PATHS:-}" ]; then
+  export MIAIR_RINGTONE_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+fi
 export PATH="$TRIM_APPDEST/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/trim/bin:$PATH"
 running() {
   [ -r "$PIDFILE" ] || return 1

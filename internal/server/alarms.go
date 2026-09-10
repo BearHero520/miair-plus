@@ -41,7 +41,10 @@ type AlarmEngine struct {
 func newAlarms(s *config.Store, m *Manager) *AlarmEngine {
 	root := os.Getenv("MIAIR_RINGTONE_DIR")
 	if root == "" {
-		root = "/var/apps/miair-plus/share/ringtones"
+		root = strings.Split(os.Getenv("TRIM_DATA_SHARE_PATHS"), ":")[0]
+	}
+	if root == "" {
+		root = "/var/apps/miair-plus/shares/ringtones"
 	}
 	return &AlarmEngine{store: s, manager: m, runs: map[string]*alarmRun{}, importing: make(chan struct{}, 1), root: root, calendar: calendar.New(s.Directory())}
 }

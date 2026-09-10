@@ -12,6 +12,22 @@ func (a *API) alarmAPI(w http.ResponseWriter, r *http.Request, path string) {
 	e := a.Manager.alarms
 	var err error
 	switch {
+	case path == "alarms/upload" && r.Method == "POST":
+		a.uploadAlarm(w, r)
+		return
+	case path == "alarms/import-nas" && r.Method == "POST":
+		var p struct {
+			Path string `json:"path"`
+		}
+		if !decode(w, r, &p) {
+			return
+		}
+		var sound string
+		sound, err = e.ImportNAS(p.Path)
+		if err == nil {
+			jsonOut(w, map[string]string{"sound": sound})
+			return
+		}
 	case path == "alarms/calendar" && r.Method == "POST":
 		var p struct {
 			Year int `json:"year"`

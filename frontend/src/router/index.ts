@@ -4,6 +4,7 @@ import { setupGuard } from './guard'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    {path:"/nas-file-callback",component:()=>import("@/views/alarms/NASCallback.vue"),meta:{public:true}},
     {
       path: '/login',
       name: 'login',
