@@ -233,7 +233,25 @@ func (r *Renderer) playAt(ctx context.Context, generation uint64) error {
 	if err != nil {
 		return err
 	}
-	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error { return r.controller.Play(ctx, s, target) }, func() { r.state = "PLAYING"; r.started = time.Now() })
+	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error {
+		r.mu.Lock()
+		already := r.state == "PLAYING"
+		volume := r.volume
+		r.mu.Unlock()
+		if already {
+			return nil
+		}
+		if err := r.controller.Play(ctx, s, target); err != nil {
+			return err
+		}
+		_ = r.controller.Volume(ctx, s, volume)
+		return nil
+	}, func() {
+		if r.state != "PLAYING" {
+			r.started = time.Now()
+		}
+		r.state = "PLAYING"
+	})
 }
 func (r *Renderer) Pause(ctx context.Context) error {
 	r.mu.Lock()
