@@ -10,6 +10,9 @@ import (
 )
 
 func TestRedactionPersistenceAndSnapshotIsolation(t *testing.T) {
+	if s := Redact("Authorization: Bearer private-bearer-token\nCookie: first=private; second=private"); strings.Contains(s, "private") {
+		t.Fatal("header credentials leaked", s)
+	}
 	dir := t.TempDir()
 	j := New(dir)
 	raw, _ := json.Marshal(Entry{Level: "error", Module: "DLNA", Message: "fetch https://user:private@example.com/song?token=private passToken=private", Details: map[string]string{"password": "private", "原因": "Cookie=private", "音箱": "客厅"}})

@@ -36,8 +36,12 @@ type Journal struct {
 
 var secret = regexp.MustCompile(`(?i)(pass_?token|service_?token|ssecurity|cookie|authorization|password|token|secret)["']?\s*[:=]\s*("[^"]*"|'[^']*'|[^\s,;]+)`)
 var urls = regexp.MustCompile(`https?://[^\s"'<>]+`)
+var authorization = regexp.MustCompile(`(?i)authorization\s*[:=]\s*(?:bearer|basic)\s+[^\s,;]+`)
+var cookieHeader = regexp.MustCompile(`(?i)\bcookie\s*[:=]\s*[^\r\n]+`)
 
 func Redact(s string) string {
+	s = authorization.ReplaceAllString(s, "Authorization=[已隐藏]")
+	s = cookieHeader.ReplaceAllString(s, "Cookie=[已隐藏]")
 	s = secret.ReplaceAllString(s, "$1=[已隐藏]")
 	s = urls.ReplaceAllStringFunc(s, func(raw string) string {
 		u, e := url.Parse(raw)
