@@ -52,9 +52,9 @@ while IFS= read -r lib; do
 done < /build/libraries
 sort -u -o /out/licenses/debian-source-versions.txt /out/licenses/debian-source-versions.txt
 cat > /etc/apt/sources.list.d/miair-sources.list <<'EOF'
-deb-src http://deb.debian.org/debian bookworm main
-deb-src http://deb.debian.org/debian bookworm-updates main
-deb-src http://security.debian.org/debian-security bookworm-security main
+deb-src [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm main
+deb-src [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://deb.debian.org/debian bookworm-updates main
+deb-src [signed-by=/usr/share/keyrings/debian-archive-keyring.gpg] http://security.debian.org/debian-security bookworm-security main
 EOF
 apt-get update
 cd /out/sources
