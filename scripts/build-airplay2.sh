@@ -46,7 +46,7 @@ while IFS= read -r lib; do
   case "$(basename "$lib")" in libc.so.*|libm.so.*|libpthread.so.*|librt.so.*|libdl.so.*) continue ;; esac
   cp -L "$lib" /out/lib/
   if [[ "$lib" != /opt/miair-audio/* ]]; then
-    package=$(dpkg-query -S "$(readlink -f "$lib")" 2>/dev/null | head -1 | sed 's/: \/.*//')
+    package=$( { dpkg-query -S "$lib" 2>/dev/null || dpkg-query -S "$(readlink -f "$lib")" 2>/dev/null || dpkg-query -S "${lib#/usr}" 2>/dev/null; } | sed -n '1s/: \/.*//p')
     if [[ -n "$package" ]]; then dpkg-query -W -f='${source:Package}=${source:Version}\n' "$package" >> /out/licenses/debian-source-versions.txt; fi
   fi
 done < /build/libraries
