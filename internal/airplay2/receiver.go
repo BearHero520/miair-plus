@@ -320,7 +320,8 @@ func (r *Receiver) bridge(ctx context.Context, o Options, pcm io.Reader, metadat
 				live = media.NewLive(512*1024, "audio/mpeg")
 				url, remove := o.Publish(live)
 				unpublish = remove
-				d, e := airplay.NewDecoder(audioCtx, o.FFmpeg, airplay.SDP{Codec: "L16", Rate: 44100, Channels: 2}, live)
+				ready := make(chan struct{})
+				d, e := airplay.NewDecoder(audioCtx, o.FFmpeg, airplay.SDP{Codec: "L16", Rate: 44100, Channels: 2}, &audioReady{Writer: live, ready: ready})
 				if e != nil {
 					cancel()
 					live.Close()
@@ -333,15 +334,37 @@ func (r *Receiver) bridge(ctx context.Context, o Options, pcm io.Reader, metadat
 				done := playDone
 				go func() {
 					defer close(done)
+					select {
+					case <-ready:
+					case <-audioCtx.Done():
+						return
+					}
 					if e := o.Target.StartAirPlay(audioCtx, url, "AirPlay 2"); e != nil && audioCtx.Err() == nil {
 						r.fail(fmt.Errorf("小米音箱启动播放失败: %w", e))
 					}
 				}()
 			}
 			if e := decoder.WritePacket(b); e != nil {
-				r.fail(fmt.Errorf("音频转码中断: %w", e))
+				if ctx.Err() == nil {
+					r.fail(fmt.Errorf("音频转码中断: %w", e))
+				}
 				return
 			}
 		}
 	}
+}
+
+// Cloud playback begins only once the decoder has emitted actual MP3 bytes.
+type audioReady struct {
+	io.Writer
+	ready chan struct{}
+	once  sync.Once
+}
+
+func (w *audioReady) Write(p []byte) (int, error) {
+	n, e := w.Writer.Write(p)
+	if n > 0 {
+		w.once.Do(func() { close(w.ready) })
+	}
+	return n, e
 }

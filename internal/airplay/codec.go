@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -160,6 +161,7 @@ func NewDecoder(ctx context.Context, ffmpeg string, s SDP, output io.Writer) (*D
 	args = append(args, "-i", "pipe:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k", "-write_xing", "0", "-flush_packets", "1", "-f", "mp3", "pipe:1")
 	cmd := exec.CommandContext(ctx, ffmpeg, args...)
 	cmd.Stdout = output
+	cmd.Stderr = decoderLog{}
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -192,3 +194,14 @@ func (d *Decoder) WritePacket(payload []byte) error {
 	return err
 }
 func (d *Decoder) Close() { d.cancel(); d.input.Close(); <-d.done }
+
+type decoderLog struct{}
+
+func (decoderLog) Write(p []byte) (int, error) {
+	n := len(p)
+	if len(p) > 2048 {
+		p = p[:2048]
+	}
+	log.Printf("AirPlay FFmpeg: %s", strings.TrimSpace(string(p)))
+	return n, nil
+}

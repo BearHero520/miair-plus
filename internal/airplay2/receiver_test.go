@@ -76,6 +76,9 @@ func TestBridgeClosesSessionAndProducers(t *testing.T) {
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
+	if r.Error() != "" {
+		t.Fatal(r.Error())
+	}
 	cancel()
 	select {
 	case <-done:
