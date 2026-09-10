@@ -276,11 +276,46 @@ func (r *Renderer) Pause(ctx context.Context) error {
 	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error { return r.controller.Operation(ctx, s, "pause") }, func() { r.position = r.positionLocked(); r.state = "PAUSED_PLAYBACK"; r.started = time.Time{} })
 }
 func (r *Renderer) Stop(ctx context.Context) error {
+	return r.StopURI(ctx, "")
+}
+
+// StopURI prevents a delayed alarm timeout from stopping a newer cast.
+func (r *Renderer) StopURI(ctx context.Context, expected string) error {
 	r.mu.Lock()
+	if expected != "" && r.uri != expected {
+		r.mu.Unlock()
+		return nil
+	}
 	r.invalidateLocked()
 	generation := r.generation
 	r.mu.Unlock()
 	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error { return r.controller.Operation(ctx, s, "stop") }, func() { r.state = "STOPPED"; r.position = 0; r.started = time.Time{}; r.airplay = false })
+}
+
+// StartAlarm reserves the URI and generation before any cloud operation.
+func (r *Renderer) StartAlarm(ctx context.Context, uri string, volume int) error {
+	if volume < 1 || volume > 100 {
+		return errors.New("无效闹钟音量")
+	}
+	if err := r.SetURI(uri, ""); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	generation := r.generation
+	r.nextURI, r.nextMeta = "", ""
+	r.volume = volume
+	r.title = "闹钟"
+	r.mu.Unlock()
+	target, err := r.proxy.URL(uri)
+	if err != nil {
+		return err
+	}
+	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error {
+		if err := r.controller.Volume(ctx, s, volume); err != nil {
+			return err
+		}
+		return r.controller.Play(ctx, s, target)
+	}, func() { r.state = "PLAYING"; r.started = time.Now() })
 }
 func (r *Renderer) Seek(ctx context.Context, seconds float64) error {
 	if seconds < 0 || seconds > 86400 {

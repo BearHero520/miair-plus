@@ -39,6 +39,7 @@ const router = createRouter({
           component: () => import('@/views/account/AccountView.vue'),
           meta: { title: '小米账号' },
         },
+        {path:'alarms',name:'alarms',component:()=>import('@/views/alarms/AlarmsView.vue'),meta:{title:'闹钟'}},
         { path: 'playback', redirect: { name: 'dashboard' } },
         {
           path: 'settings',

@@ -1,5 +1,5 @@
 appname=miair-plus
-version=2.0.0-alpha.5
+version=2.0.0-alpha.6
 display_name=MiAir Plus · Go
 desc=小爱音箱 DLNA / AirPlay 音频扩展。Go 主服务与 Shairport Sync 原生组件，内置 FFmpeg；x86_64 / ARM64 通用。AirPlay 2 预览功能需要系统 Avahi / D-Bus，开启后选择目标音箱。Web 8310，DLNA 8311。
 platform=all

@@ -37,6 +37,7 @@ type Credentials struct {
 	IssuedAt     int64  `json:"issued_at"`
 }
 type State struct {
+	Alarms         []Alarm            `json:"alarms,omitempty"`
 	Version        int                `json:"schema_version"`
 	Username       string             `json:"username"`
 	PasswordHash   string             `json:"password_hash"`
@@ -98,6 +99,7 @@ func Open(dir string) (*Store, error) {
 }
 func clone(s State) State {
 	result := s
+	result.Alarms = append([]Alarm(nil), s.Alarms...)
 	result.Speakers = make(map[string]Speaker, len(s.Speakers))
 	for k, v := range s.Speakers {
 		result.Speakers[k] = v

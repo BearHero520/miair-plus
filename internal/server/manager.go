@@ -21,6 +21,7 @@ import (
 )
 
 type Manager struct {
+	alarms      *AlarmEngine
 	mu          sync.RWMutex
 	applyMu     sync.Mutex
 	ctx         context.Context
@@ -49,7 +50,9 @@ type Manager struct {
 }
 
 func NewManager(ctx context.Context, store *config.Store, client *xiaomi.Client, noDiscovery bool) *Manager {
-	return &Manager{ctx: ctx, store: store, client: client, noDiscovery: noDiscovery, renderers: map[string]*dlna.Renderer{}, air: map[string]*airplay.Server{}, live: map[string]*media.Live{}, names: map[string]string{}, errors: map[string]string{}, wake: make(chan struct{}, 1), events: dlna.NewEvents(ctx)}
+	m := &Manager{ctx: ctx, store: store, client: client, noDiscovery: noDiscovery, renderers: map[string]*dlna.Renderer{}, air: map[string]*airplay.Server{}, live: map[string]*media.Live{}, names: map[string]string{}, errors: map[string]string{}, wake: make(chan struct{}, 1), events: dlna.NewEvents(ctx)}
+	m.alarms = newAlarms(store, m)
+	return m
 }
 func LANHost(configured string) (string, error) {
 	if configured != "" {
@@ -102,6 +105,7 @@ func (m *Manager) Schedule() {
 	}
 }
 func (m *Manager) Run() {
+	go m.alarms.Run(m.ctx)
 	m.Schedule()
 	retry := time.NewTicker(30 * time.Second)
 	defer retry.Stop()
@@ -157,6 +161,7 @@ func (m *Manager) Apply() error {
 		mux := http.NewServeMux()
 		diagnostics.Event("info", "DLNA", "投送服务已启动", map[string]string{"地址": host, "端口": fmt.Sprint(state.DLNAPort)})
 		mux.Handle("/media/", m.proxy)
+		mux.Handle("/alarm-audio/", m.alarms)
 		mux.HandleFunc("GET /live/{id}", func(w http.ResponseWriter, r *http.Request) {
 			m.mu.RLock()
 			live := m.live[r.PathValue("id")]

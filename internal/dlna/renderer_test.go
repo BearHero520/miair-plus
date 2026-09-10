@@ -51,6 +51,29 @@ func (f *fakeController) Status(context.Context, config.Speaker) (map[string]any
 func rendererForTest(f *fakeController) *Renderer {
 	return NewRenderer(context.Background(), config.Speaker{DID: "123", Name: "客厅", Enabled: true}, f, media.NewProxy("http://192.168.1.2:8311", "test"), 40)
 }
+
+func TestOldAlarmCannotStopNewCast(t *testing.T) {
+	f := &fakeController{}
+	r := rendererForTest(f)
+	defer r.Close()
+	old := "http://192.168.1.2:8311/alarm-audio/old"
+	if err := r.StartAlarm(context.Background(), old, 20); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetURI("https://example.com/new.mp3", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.StopURI(context.Background(), old); err != nil {
+		t.Fatal(err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, call := range f.calls {
+		if call == "stop" {
+			t.Fatal("old alarm stopped new cast")
+		}
+	}
+}
 func TestStopCancelsSlowPlay(t *testing.T) {
 	f := &fakeController{started: make(chan struct{}, 1)}
 	r := rendererForTest(f)

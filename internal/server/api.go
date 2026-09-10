@@ -27,7 +27,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.0-alpha.5"
+const Version = "2.0.0-alpha.6"
 
 type API struct {
 	Store    *config.Store
@@ -211,6 +211,10 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 	}
 	if !a.valid(token) {
 		fail(w, 401, errors.New("请重新登录"))
+		return
+	}
+	if strings.HasPrefix(path, "alarms") {
+		a.alarmAPI(w, r, path)
 		return
 	}
 	s := a.Store.Snapshot()
