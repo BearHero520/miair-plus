@@ -2,11 +2,22 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <script src="%BASE_URL%boot.js"></script>
+    <link rel="icon" type="image/png" href="./favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>MiAir Plus 管理后台</title>
   </head>
   <body>
+    <div id="boot-status" role="status" style="padding:48px 24px;text-align:center;font-family:system-ui,sans-serif;color:#526477">
+      <strong>MiAir Plus</strong>
+      <p id="boot-message">正在打开管理页面…</p>
+      <button id="boot-reload" hidden style="min-height:44px;padding:0 20px" onclick="location.reload()">重新加载</button>
+      <details id="boot-details" hidden open style="margin:24px auto;max-width:640px;text-align:left">
+        <summary>错误详情</summary><pre id="boot-error" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre>
+      </details>
+    </div>
+    <noscript>请启用 JavaScript 后重新打开 MiAir Plus。</noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

@@ -25,6 +25,8 @@ sh "$ROOT/packaging/fpk/cmd/main" status
 [ "$(stat -c %U "$TRIM_PKGVAR/data/miair-plus.json")" = nobody ]
 [ "$(stat -c %a "$TRIM_PKGVAR/data/miair-plus.json")" = 600 ]
 curl -fsS http://127.0.0.1:8310/ >/dev/null
+test -S "$TRIM_APPDEST/app.sock"
+curl -fsS --unix-socket "$TRIM_APPDEST/app.sock" http://localhost/app/miair-plus/ | grep -q '<base href="/app/miair-plus/"'
 sh "$ROOT/packaging/fpk/cmd/main" stop
 sh "$ROOT/packaging/fpk/cmd/main" start
 sh "$ROOT/packaging/fpk/cmd/main" stop

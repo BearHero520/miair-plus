@@ -2,6 +2,7 @@ import { onUnmounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { fetchMe } from '@/api/auth'
 import router from '@/router'
+import { appURL } from '@/utils/basePath'
 
 export interface NowPlaying {
   playing: boolean
@@ -51,7 +52,7 @@ export function useWebSocket() {
     if (!auth.token) return
 
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    ws = new WebSocket(`${proto}://${location.host}/api/v1/ws?token=${auth.token}`)
+    ws = new WebSocket(`${proto}://${location.host}${appURL('api/v1/ws')}?miair_token=${encodeURIComponent(auth.token)}`)
 
     ws.onopen = () => {
       everOpened = true

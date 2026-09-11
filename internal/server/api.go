@@ -18,7 +18,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"runtime"
 	"strconv"
 	"strings"
@@ -27,7 +26,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.0-alpha.7"
+const Version = "2.0.5"
 
 type API struct {
 	Store    *config.Store
@@ -105,19 +104,16 @@ func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/", a.api)
 	mux.Handle("/", web.Handler())
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return web.GatewayHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		if origin := r.Header.Get("Origin"); origin != "" {
-			u, err := url.Parse(origin)
-			if err != nil || !strings.EqualFold(u.Host, r.Host) {
-				fail(w, 403, errors.New("跨站请求被拒绝"))
-				return
-			}
+		if strings.HasPrefix(r.URL.Path, "/api/") && !a.allowedOrigin(r) {
+			fail(w, 403, errors.New("跨站请求被拒绝"))
+			return
 		}
 		mux.ServeHTTP(w, r)
-	})
+	}))
 }
 func (a *API) allowed(r *http.Request) bool {
 	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
@@ -206,8 +202,14 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if r.Header.Get("X-Miair-Authorization") != "" {
+		token = strings.TrimPrefix(r.Header.Get("X-Miair-Authorization"), "Bearer ")
+	}
 	if path == "ws" {
-		token = r.URL.Query().Get("token")
+		token = r.URL.Query().Get("miair_token")
+		if token == "" {
+			token = r.URL.Query().Get("token")
+		}
 	}
 	if !a.valid(token) {
 		fail(w, 401, errors.New("请重新登录"))
@@ -336,7 +338,7 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 		a.Manager.Schedule()
 		jsonOut(w, map[string]any{"ok": true, "message": "已安排服务检查"})
 	case "GET system/check_update":
-		jsonOut(w, map[string]any{"current": Version, "latest": nil, "update_available": false, "release_url": "https://github.com/BearHero520/miair-plus/releases", "error": "请到 GitHub Releases 查看预览版更新"})
+		jsonOut(w, map[string]any{"current": Version, "latest": nil, "update_available": false, "release_url": "https://github.com/BearHero520/miair-plus/releases", "error": "请到 GitHub Releases 查看版本更新"})
 	case "GET ws":
 		a.websocket(w, r, token)
 	default:
@@ -539,14 +541,7 @@ func (a *API) websocket(w http.ResponseWriter, r *http.Request, token string) {
 		fail(w, 503, errors.New("状态连接过多"))
 		return
 	}
-	upgrader := websocket.Upgrader{CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			return true
-		}
-		u, e := url.Parse(origin)
-		return e == nil && strings.EqualFold(u.Host, r.Host)
-	}}
+	upgrader := websocket.Upgrader{CheckOrigin: a.allowedOrigin}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return

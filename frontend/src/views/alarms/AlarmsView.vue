@@ -23,7 +23,7 @@
    <n-form-item v-if="form.rule==='weekly'" label="星期"><n-checkbox-group v-model:value="selectedDays"><n-space><n-checkbox v-for="(day,i) in dayNames" :key="day" :value="i" :label="day"/></n-space></n-checkbox-group></n-form-item>
    <n-form-item label="时区"><n-select v-model:value="form.timezone" :options="[{label:'北京时间 · Asia/Shanghai',value:'Asia/Shanghai'}]"/></n-form-item>
    <n-form-item label="目标音箱"><n-select v-model:value="form.speaker" :options="speakerOptions" placeholder="请选择已启用的音箱"/></n-form-item>
-   <n-form-item label="闹钟音乐"><div class="alarm-music-source"><n-input :value="audioName(form.sound)" readonly placeholder="上传音乐或从 NAS 选择"/><div class="alarm-actions"><n-button :loading="uploading" :disabled="nasBusy||busy" @click="uploadInput?.click()">上传音乐</n-button><n-button :loading="nasBusy" :disabled="uploading||busy" @click="selectNAS">从 NAS 选择</n-button><n-button quaternary :disabled="uploading||busy" @click="openFiles('.')">铃声库</n-button></div><input ref="uploadInput" type="file" accept=".mp3,.wav,.flac,.ogg,.aac" hidden @change="uploadMusic"/><p v-if="uploading">正在上传 {{uploadProgress}}%</p><p v-if="nasBusy">请在飞牛页面选择文件并授权，完成后返回这里。<n-button text @click="cancelNAS">取消</n-button></p></div></n-form-item>
+   <n-form-item label="闹钟音乐"><div class="alarm-music-source"><n-input :value="audioName(form.sound)" readonly placeholder="上传音乐或从 NAS 选择"/><div class="alarm-actions"><n-button :loading="uploading" :disabled="nasBusy||busy" @click="uploadInput?.click()">上传音乐</n-button><n-button :loading="nasBusy" :disabled="uploading||busy" @click="selectNAS">从 NAS 选择</n-button><n-button quaternary :disabled="uploading||busy" @click="openFiles('.')">铃声库</n-button><n-button quaternary :disabled="busy" @click="nasSettings">飞牛授权设置</n-button></div><input ref="uploadInput" type="file" accept=".mp3,.wav,.flac,.ogg,.aac" hidden @change="uploadMusic"/><p v-if="uploading">正在上传 {{uploadProgress}}%</p><p v-if="nasBusy">请在飞牛页面选择文件并授权，完成后返回这里。<n-button text @click="refreshNASResult">读取授权结果</n-button> · <n-button text @click="cancelNAS">取消</n-button></p></div></n-form-item>
    <div class="alarm-fields"><n-form-item label="响铃音量（%）"><n-input-number v-model:value="form.volume" :min="1" :max="100"/></n-form-item><n-form-item label="最长响铃（分钟）"><n-input-number v-model:value="form.minutes" :min="1" :max="10"/></n-form-item></div>
    <n-alert v-if="saveError" type="error" style="margin-bottom:14px">{{saveError}}</n-alert>
    <p v-if="busy">正在保存并准备铃声，请稍候…</p><n-button type="primary" block :loading="busy" :disabled="uploading||nasBusy" @click="save">保存闹钟</n-button>
@@ -41,15 +41,17 @@ import {computed,onMounted,onUnmounted,reactive,ref,watch} from 'vue'
 import {NAlert,NButton,NCheckbox,NCheckboxGroup,NForm,NFormItem,NIcon,NInput,NInputNumber,NModal,NPopconfirm,NSelect,NSpace,NSwitch,NTag,NTimePicker,useMessage} from 'naive-ui'
 import {AlarmOutline} from '@vicons/ionicons5'
 import http from '@/api/http'
-import {TrimApp,type AppAuthResult} from '@trimjs/web-app'
+import {type AppAuthResult} from '@trimjs/web-app'
+import {fnos as sdk,waitForFnos,openFnosSettings} from '@/utils/fnos'
+import {storage as localStorage} from '@/utils/storage'
+import {appURL,basePath} from '@/utils/basePath'
 type Alarm={id:string;name:string;time:string;timezone:string;rule:string;days:number;speaker:string;sound:string;volume:number;minutes:number;enabled:boolean}
 type Row={alarm:Alarm;state:string;error:string;next:string[];calendar_ready:boolean}
 type FileItem={name:string;path:string;directory:boolean}
 const rows=ref<Row[]>([]),speakers=ref<{did:string;dlna_name:string;name:string;enabled:boolean}[]>([]),calendar=ref<Record<string,string[]>>({}),error=ref(''),saveError=ref(''),show=ref(false),busy=ref(false),calendarBusy=ref(false),picker=ref(false),folder=ref('.'),files=ref<FileItem[]>([]),fileError=ref(''),filesBusy=ref(false),message=useMessage()
 const fresh=():Alarm=>({id:'',name:'起床闹钟',time:'07:00',timezone:'Asia/Shanghai',rule:'workday',days:62,speaker:'',sound:'',volume:30,minutes:3,enabled:true})
-const sdk=new TrimApp({debug:false})
 const uploadInput=ref<HTMLInputElement>(),uploading=ref(false),uploadProgress=ref(0),nasBusy=ref(false)
-let nasState='',nasWindow:Window|null=null,uploadAbort:AbortController|undefined
+let nasState='',nasWindow:Window|null=null,uploadAbort:AbortController|undefined,nasImportAbort:AbortController|undefined,nasGeneration=0
 const form=reactive(fresh()),dayNames=['周日','周一','周二','周三','周四','周五','周六']
 const rules=[{label:'法定工作日（含调休补班）',value:'workday'},{label:'休息日（周末及节假日）',value:'restday'},{label:'仅法定节假日',value:'holiday'},{label:'指定星期 / 每天',value:'weekly'}]
 const selectedDays=computed({get:()=>dayNames.map((_,i)=>i).filter(i=>form.days&(1<<i)),set:(days:(string|number)[])=>{form.days=days.reduce<number>((mask,d)=>mask|(1<<Number(d)),0)}})
@@ -79,29 +81,52 @@ async function uploadMusic(event:Event){
  uploading.value=true;uploadProgress.value=0;saveError.value='';uploadAbort=new AbortController()
  try{const body=new FormData();body.append('file',file);const r=await http.post('/alarms/upload',body,{timeout:180000,signal:uploadAbort.signal,onUploadProgress:event=>{uploadProgress.value=Math.round(100*event.loaded/(event.total||file.size))}});form.sound=r.data.sound;message.success('音乐已上传，保存闹钟时将准备铃声')}catch(e){saveError.value=reason(e)}finally{uploading.value=false;input.value=''}
 }
-function cancelNAS(){nasState='';nasBusy.value=false;if(nasWindow&&!nasWindow.closed)nasWindow.close();nasWindow=null}
+function cancelNAS(){nasGeneration++;nasImportAbort?.abort();nasState='';nasBusy.value=false;if(nasWindow&&!nasWindow.closed)nasWindow.close();nasWindow=null}
 async function importNASResult(result:AppAuthResult){
  if(!nasState||result.state!==nasState||result.appName!=='miair-plus'||result.method!=='pickUserFile')return
+ const generation=nasGeneration;nasImportAbort=new AbortController()
  nasState='';localStorage.removeItem('miair:nas-file-result')
- try{if(result.status==='cancel')return;if(result.status!=='success'||!result.path?.[0])throw Error('未获得 NAS 文件授权');const r=await http.post('/alarms/import-nas',{path:result.path[0]},{timeout:120000});form.sound=r.data.sound;message.success('NAS 音乐已选取')}catch(e){saveError.value=reason(e)}finally{nasBusy.value=false;nasWindow=null}
+ try{if(result.status==='cancel')return;if(result.status!=='success'||!result.path?.[0])throw Error('未获得 NAS 文件授权');const r=await http.post('/alarms/import-nas',{path:result.path[0]},{timeout:120000,signal:nasImportAbort.signal});if(generation!==nasGeneration)return;form.sound=r.data.sound;message.success('NAS 音乐已选取')}catch(e){if(generation===nasGeneration)saveError.value=reason(e)}finally{if(generation===nasGeneration){nasBusy.value=false;nasWindow=null}}
 }
+async function nasSettings(){try{await openFnosSettings()}catch(e){saveError.value=reason(e)}}
+function refreshNASResult(){
+ const stored=localStorage.getItem('miair:nas-file-result')
+ if(stored){try{const value=JSON.parse(stored);if(value.result?.state===nasState&&nasState){void importNASResult(value.result);return}}catch{}}
+ message.info('尚未收到本次文件授权结果，请完成选择；若授权页已关闭，请取消后重新选择')
+}
+function resumeNAS(){if(nasBusy.value&&localStorage.getItem('miair:nas-file-result'))refreshNASResult()}
 function nasMessage(event:MessageEvent){if(event.origin!==location.origin||event.source!==nasWindow||event.data?.type!=='miair:nas-file')return;void importNASResult(event.data.result)}
 function nasStorage(event:StorageEvent){if(event.key!=='miair:nas-file-result'||!event.newValue)return;try{const v=JSON.parse(event.newValue);if(v.type==='miair:nas-file')void importNASResult(v.result)}catch{}}
 async function selectNAS(){
+ if(nasBusy.value||uploading.value)return
+ if(basePath==='/'){saveError.value='请从飞牛应用入口选择 NAS 文件；直接 IP + 端口访问请使用上传音乐';return}
  saveError.value='';nasBusy.value=true
+ localStorage.removeItem('miair:nas-file-result')
  nasState=Array.from(crypto.getRandomValues(new Uint8Array(24)),b=>b.toString(16).padStart(2,'0')).join('')
+ if(!sdk.isStandaloneWeb){
+  const state=nasState
+  try{
+   await waitForFnos()
+   if(nasState!==state)return
+   const result=await sdk.pickUserFile({directory:false,multiple:false,title:'选择闹钟音乐',okText:'授权并使用',sidebarGroup:['myFiles','otherShare','favorites'],accept:['.mp3','.wav','.flac','.ogg','.aac']})
+   if(nasState!==state)return
+   if(result&&result.code!==0)throw Error(result.msg||'未获得 NAS 文件授权')
+   await importNASResult({appName:'miair-plus',method:'pickUserFile',state,status:result?.data?.length?'success':'cancel',path:result?.data})
+  }catch(e){if(nasState===state){cancelNAS();saveError.value=reason(e)}}
+  return
+ }
  // Open synchronously in the click handler to preserve the browser user gesture.
  nasWindow=window.open('','miair-nas-picker','width=860,height=680')
- if(!nasWindow){nasBusy.value=false;saveError.value='请允许弹出窗口，或使用上传音乐';return}
+ if(!nasWindow){cancelNAS();saveError.value='请允许弹出窗口，或使用上传音乐';return}
  try{
-  const auth=await sdk.buildAppAuthUrl('pickUserFile',{appName:'miair-plus',directory:false,accept:['.mp3','.wav','.flac','.ogg','.aac'],sidebarGroup:['myFiles','otherShare','favorites'],redirectUri:location.origin+'/nas-file-callback',state:nasState})
-  const url=new URL(auth);url.hostname=location.hostname;url.port=location.protocol==='https:'?'5001':'5000'
+  const auth=await sdk.buildAppAuthUrl('pickUserFile',{appName:'miair-plus',directory:false,accept:['.mp3','.wav','.flac','.ogg','.aac'],sidebarGroup:['myFiles','otherShare','favorites'],redirectUri:location.origin+appURL('nas-file-callback'),state:nasState})
+  const url=new URL(auth);if(basePath==='/'){url.hostname=location.hostname;url.port=location.protocol==='https:'?'5001':'5000'}
   nasWindow.location.href=url.href
  }catch(e){cancelNAS();saveError.value=reason(e)}
 }
 watch(show,value=>{if(!value){uploadAbort?.abort();cancelNAS();picker.value=false}})
-onMounted(async()=>{window.addEventListener('message',nasMessage);window.addEventListener('storage',nasStorage);await load();try{speakers.value=(await http.get('/speakers')).data}catch(e){error.value=reason(e)};timer=setInterval(()=>{if(!document.hidden)void load()},3000)})
-onUnmounted(()=>{uploadAbort?.abort();if(timer)clearInterval(timer);window.removeEventListener('message',nasMessage);window.removeEventListener('storage',nasStorage);cancelNAS()})
+onMounted(async()=>{window.addEventListener('focus',resumeNAS);window.addEventListener('message',nasMessage);window.addEventListener('storage',nasStorage);await load();try{speakers.value=(await http.get('/speakers')).data}catch(e){error.value=reason(e)};timer=setInterval(()=>{if(!document.hidden)void load()},3000)})
+onUnmounted(()=>{uploadAbort?.abort();if(timer)clearInterval(timer);window.removeEventListener('focus',resumeNAS);window.removeEventListener('message',nasMessage);window.removeEventListener('storage',nasStorage);cancelNAS()})
 </script>
 <style scoped>
 .alarm-toolbar,.alarm-calendar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}.alarm-toolbar p{flex:1}.alarm-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.alarm-card{padding:23px}.alarm-clock{font-size:40px;letter-spacing:-1px;font-variant-numeric:tabular-nums;line-height:1.4}.alarm-clock small{display:block;font-size:12px;letter-spacing:0;color:var(--accent);margin:4px 0 10px}.alarm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}.alarm-sound{overflow-wrap:anywhere}.alarm-next{font-size:11px;margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.alarm-help{padding:22px;margin-top:24px}.alarm-help strong{font-size:14px}.alarm-help p{margin:8px 0;font-size:12px}.alarm-calendar{font-size:12px;margin:15px 0 0}.alarm-error{color:#e45656}.alarm-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px}.alarm-music-source{width:100%}.alarm-music-source .alarm-actions{margin-top:8px}.alarm-file-choice{display:flex;gap:10px;width:100%}.alarm-time-field{width:100%}.alarm-time-field :deep(.n-time-picker){width:100%}.alarm-time-field :deep(.n-input__input-el){font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:2px}.alarm-time-hint{display:block;margin-top:8px;font-size:12px;color:var(--muted)}.alarm-file-list{max-height:300px;overflow:auto;margin:12px 0}.alarm-file-list .n-button{justify-content:flex-start}.alarm-fields .n-input-number{width:100%}@media(max-width:760px){.alarm-grid{grid-template-columns:1fr}.alarm-fields{grid-template-columns:1fr}.alarm-clock{font-size:34px}}

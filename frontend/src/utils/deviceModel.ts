@@ -47,5 +47,5 @@ export function getDeviceModelInfo(hardware: string): DeviceModelInfo {
 
 /** 型号图片的可访问 URL */
 export function getDeviceImageUrl(hardware: string): string {
-  return `/devicespic/${getDeviceModelInfo(hardware).image}`
+  return new URL(`devicespic/${getDeviceModelInfo(hardware).image}`, document.baseURI).href
 }

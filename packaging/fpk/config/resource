@@ -1,1 +1,1 @@
-{"data-share":{"shares":[{"name":"miair-plus/ringtones"}]},"api-scope":["trim.file.userAccess"]}
+{"data-share":{"shares":[{"name":"miair-plus/ringtones"}]},"api-scope":["trim.file.userAccess","trim.file.userAcl"]}

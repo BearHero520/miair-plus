@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { setupGuard } from './guard'
+import { basePath } from '@/utils/basePath'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(basePath),
   routes: [
     {path:"/nas-file-callback",component:()=>import("@/views/alarms/NASCallback.vue"),meta:{public:true}},
     {

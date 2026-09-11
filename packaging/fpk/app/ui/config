@@ -1,1 +1,1 @@
-{".url":{"miair-plus.main":{"title":"MiAir Plus","desc":"Go 原生音箱投送扩展","icon":"images/icon_{0}.png","type":"url","protocol":"http","port":"8310","url":"/","allUsers":true}}}
+{".url":{"miair-plus.main":{"title":"MiAir Plus","desc":"Go 原生音箱投送扩展","icon":"images/icon_{0}.png","type":"iframe","protocol":"","gatewayPrefix":"/app/miair-plus","gatewaySocket":"app.sock","url":"/app/miair-plus/","allUsers":true}}}

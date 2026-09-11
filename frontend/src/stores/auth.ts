@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { fetchMe } from '@/api/auth'
+import { storage as localStorage } from '@/utils/storage'
 
 /** 登录状态: token 存取 (localStorage 持久化) */
 export const useAuthStore = defineStore('auth', () => {

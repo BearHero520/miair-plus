@@ -43,10 +43,15 @@ case "${1:-}" in
     exec >>"$STATE/startup.log" 2>&1
     printf '%s Preparing MiAir Plus\n' "$(date -Iseconds)"
     mkdir -p "$STATE/data"
+    # Keep binaries root-owned; only this socket directory is writable by the service.
+    mkdir -p "$TRIM_APPDEST/gateway"
+    chmod 755 "$TRIM_APPDEST/gateway"
+    ln -sfn gateway/http.sock "$TRIM_APPDEST/app.sock"
     # Root is used only for preparation. The HTTP service and audio receiver
     # run as the package account; only the clock helper can bind UDP 319/320.
     if [ "$(id -u)" = 0 ]; then
       chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" "$STATE" "$STATE/data"
+      chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" "$TRIM_APPDEST/gateway"
       # Earlier packages ran as root. Migrate private state, without following
       # symlinks or touching runtime binaries and their clock capability.
       find -P "$STATE/data" -xdev -type d -exec chown "${TRIM_USERNAME:-miair-plus}:${TRIM_GROUPNAME:-miair-plus}" {} + -exec chmod 700 {} +
@@ -64,9 +69,9 @@ case "${1:-}" in
     [ ! -f "$STATE/app.log" ] || mv -f "$STATE/app.log" "$STATE/app.previous.log"
     rm -f "$PIDFILE"
     if [ "$(id -u)" = 0 ]; then
-      runuser -u "${TRIM_USERNAME:-miair-plus}" -- sh -c 'umask 077; nohup "$1" --data "$2/data" --listen :8310 >"$2/app.log" 2>&1 & echo "$!" >"$2/app.pid"' sh "$APP" "$STATE"
+      runuser -u "${TRIM_USERNAME:-miair-plus}" -- sh -c 'umask 077; nohup "$1" --data "$2/data" --listen :8310 --gateway-socket "$3/gateway/http.sock" >"$2/app.log" 2>&1 & echo "$!" >"$2/app.pid"' sh "$APP" "$STATE" "$TRIM_APPDEST"
     else
-      nohup "$APP" --data "$STATE/data" --listen :8310 >"$STATE/app.log" 2>&1 &
+      nohup "$APP" --data "$STATE/data" --listen :8310 --gateway-socket "$TRIM_APPDEST/gateway/http.sock" >"$STATE/app.log" 2>&1 &
       echo "$!" >"$PIDFILE"
     fi
     sleep 1

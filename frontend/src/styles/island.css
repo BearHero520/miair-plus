@@ -20,3 +20,13 @@
 /* Keep page scrolling from changing the available layout width. */
 html{scrollbar-width:none}
 html::-webkit-scrollbar{width:0;height:0}
+
+/* Mobile navigation uses full-width pages and respects the system gesture area. */
+.mobile-nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:8px max(8px,env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));border-radius:20px 20px 0 0;background:var(--surface);box-shadow:0 -4px 24px #2038530d}
+.mobile-nav a,.mobile-nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-width:0;min-height:52px;border:0;border-radius:12px;background:transparent;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;touch-action:manipulation;text-decoration:none}
+.mobile-nav .router-link-active,.mobile-nav .is-active{color:var(--accent);background:var(--soft);font-weight:600}
+.mobile-nav a:focus-visible,.mobile-nav button:focus-visible,.mobile-more a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.mobile-more{display:grid;gap:8px;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.mobile-more a{display:flex;align-items:center;gap:14px;min-height:52px;padding:0 16px;border-radius:12px;color:var(--ink);background:var(--soft)}
+.mobile-more .router-link-active{color:var(--accent);font-weight:600}
+@media(max-width:700px){.app-workspace{display:block;min-height:100vh;min-height:100dvh;padding:12px max(16px,env(safe-area-inset-right)) calc(92px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}.app-sidebar{display:none}.app-topbar{height:48px;font-size:14px;margin-bottom:22px}.app-main{padding-bottom:12px}.app-topbar .studio-tools{min-width:0}.app-topbar .bar .n-button__content{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}

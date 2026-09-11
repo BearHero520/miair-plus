@@ -1,7 +1,7 @@
 <template>
  <n-space vertical :size="16">
   <n-card title="投送与连接"><n-spin :show="loading"><n-form label-placement="top" :show-feedback="false"><n-space vertical :size="20">
-   <n-alert v-if="!form.ffmpeg_available" type="warning">音频组件未就绪，请检查安装包是否完整，或清空自定义路径后重试。</n-alert>
+   <n-alert v-if="loaded && !form.ffmpeg_available" type="warning">音频组件未就绪，请检查安装包是否完整，或清空自定义路径后重试。</n-alert>
    <n-form-item label="NAS 局域网 IPv4"><n-input v-model:value="form.hostname" placeholder="留空自动选择，例如 192.168.1.10"/></n-form-item>
    <n-form-item label="DLNA 音频端口"><n-input-number v-model:value="form.dlna_port" :min="1024" :max="65535"/></n-form-item>
    <n-form-item label="AirPlay 音频接收"><n-switch v-model:value="form.airplay_enabled"/></n-form-item>
@@ -31,10 +31,10 @@ import {computed,onMounted,onUnmounted,reactive,ref} from 'vue'
 import {NSpace,NCard,NSpin,NForm,NFormItem,NInput,NInputNumber,NSwitch,NSelect,NButton,NText,NAlert,NRadioGroup,NRadioButton,NTag,NCollapse,NCollapseItem,useMessage} from 'naive-ui'
 import {fetchSettings,saveSettings} from '@/api/system'
 import {useAppStore} from '@/stores/app'
-const app=useAppStore(),message=useMessage(),loading=ref(false),saving=ref(false)
+const app=useAppStore(),message=useMessage(),loading=ref(false),saving=ref(false),loaded=ref(false)
 const form=reactive({hostname:'',dlna_port:8311,airplay_enabled:true,airplay2_enabled:false,airplay2_target:'',airplay2_running:false,airplay2_error:'',speakers:{} as Record<string,{enabled:boolean;name:string;dlna_name:string}>,ffmpeg_path:'',ffmpeg_available:false,ffmpeg_source:'missing',ffmpeg_resolved:'',auto_play_on_set_uri:true,auto_restart:true,default_volume:40,default_audio_id:'',version:'',engine_version:''})
 const speakerOptions=computed(()=>[{label:'自动选择第一台已启用音箱',value:''},...Object.entries(form.speakers).filter(([,s])=>s.enabled).map(([did,s])=>({label:s.dlna_name||s.name,value:did}))])
-async function load(){loading.value=true;try{Object.assign(form,await fetchSettings())}catch(e:any){message.error(e.response?.data?.detail||'读取失败')}finally{loading.value=false}}
+async function load(){loading.value=true;try{Object.assign(form,await fetchSettings());loaded.value=true}catch(e:any){message.error(e.response?.data?.detail||'读取失败')}finally{loading.value=false}}
 async function save(){saving.value=true;try{const {speakers,...patch}=form;await saveSettings(patch);message.success('已保存，后台正在应用设置')}catch(e:any){message.error(e.response?.data?.detail||'保存失败')}finally{saving.value=false}}
 onMounted(load)
 const timer=setInterval(async()=>{try{const s=await fetchSettings();form.airplay2_running=!!s.airplay2_running;form.airplay2_error=s.airplay2_error||''}catch{}},5000)

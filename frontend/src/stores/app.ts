@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { storage as localStorage } from '@/utils/storage'
+import { fnosHost } from '@/utils/fnos'
 
 /** 主题模式: 亮色 / 暗色 / 跟随系统 (青龙式三态, 默认跟随系统) */
 export type ThemeMode = 'light' | 'dark' | 'auto'
@@ -19,12 +21,14 @@ export const useAppStore = defineStore('app', () => {
   // 跟随系统: 监听系统深色偏好变化实时生效
   const media = window.matchMedia('(prefers-color-scheme: dark)')
   const systemDark = ref(media.matches)
-  media.addEventListener('change', (e) => {
+  const onThemeChange = (e: MediaQueryListEvent) => {
     systemDark.value = e.matches
-  })
+  }
+  if (media.addEventListener) media.addEventListener('change', onThemeChange)
+  else media.addListener(onThemeChange)
 
   const dark = computed(() =>
-    theme.value === 'auto' ? systemDark.value : theme.value === 'dark',
+    theme.value === 'auto' ? (fnosHost.theme ? fnosHost.theme === 'dark' : systemDark.value) : theme.value === 'dark',
   )
 
   watch(collapsed, (v) => localStorage.setItem('sider-collapsed', v ? '1' : '0'))

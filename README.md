@@ -58,7 +58,7 @@
 | AirPlay 2 | 预览功能，单个接收实例选择一个目标音箱；需要系统 D-Bus、Avahi 及可用的 TCP 7000、UDP 319/320 端口 |
 | 音频投送范围 | 不支持屏幕镜像、视频接收，不保证多房间精确同步 |
 
-当前为预览版。已在 x86_64 飞牛 NAS 验证启动、NAS 文件授权、音乐导入、保存与转码；实际投送、闹钟响铃和语音停止仍需按音箱型号与发送端验证。详细状态见 [兼容与测试说明](docs/COMPATIBILITY.md)。
+当前修复包为 2.0.5，用户已反馈既有功能测试稳定。已在 x86_64 飞牛 NAS 验证启动、NAS 文件授权、音乐导入、保存与转码；实际投送、闹钟响铃和语音停止仍需按音箱型号与发送端验证。详细状态见 [兼容与测试说明](docs/COMPATIBILITY.md)。
 
 ## 开发与构建
 
@@ -85,3 +85,7 @@ Windows 可用 `Copy-Item frontend/dist/* internal/web/dist -Recurse -Force` 替
 应用配置保存在数据目录中；飞牛卸载前可按需备份 `${TRIM_PKGVAR}/data`。配置包含小米登录凭据，请勿公开上传。
 
 项目采用 GPL-3.0 许可证。致谢 [miair-next](https://github.com/deerwan/miair-next)、[MiAir](https://github.com/KiriChen-Wind/MiAir) 及相关开源组件，来源与许可详见 [UPSTREAM.md](UPSTREAM.md)。调休日历使用 [holiday-cn](https://github.com/NateScarlet/holiday-cn) 数据。原生组件对应源码随 Release 提供，安装包内保留相关许可证。
+
+## 手机飞牛 App 与远程访问
+
+2.0.2 正式版起，应用中心入口通过飞牛统一网关访问 `/app/miair-plus/`，复用系统域名与 HTTPS，局域网仍可直接访问 8310。移动端使用底部导航，账号、日志、关于位于“更多”。NAS 文件授权能力需要 fnOS 1.2.0401+、飞牛 App 1.34.0+。网关接入及 iOS 真机复测说明见 [手机端排查记录](docs/FNOS-MOBILE.md)。

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/BearHero520/miair-plus/internal/config"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -22,8 +23,32 @@ func (a *API) alarmAPI(w http.ResponseWriter, r *http.Request, path string) {
 		if !decode(w, r, &p) {
 			return
 		}
+		uid, userErr := gatewayUID(r)
+		if userErr != nil {
+			fail(w, 403, userErr)
+			return
+		}
+		if !allowedNASAudio(p.Path) {
+			fail(w, 400, errors.New("请选择 NAS 存储空间中的音频文件"))
+			return
+		}
+		resolved, pathErr := filepath.EvalSymlinks(p.Path)
+		if pathErr != nil || !allowedNASAudio(resolved) {
+			fail(w, 400, errors.New("所选文件路径不可访问"))
+			return
+		}
+		if aclErr := checkFnosRead(r.Context(), fnosHTTP, uid, p.Path); aclErr != nil {
+			fail(w, 403, aclErr)
+			return
+		}
+		if resolved != p.Path {
+			if aclErr := checkFnosRead(r.Context(), fnosHTTP, uid, resolved); aclErr != nil {
+				fail(w, 403, aclErr)
+				return
+			}
+		}
 		var sound string
-		sound, err = e.ImportNAS(p.Path)
+		sound, err = e.ImportNAS(resolved)
 		if err == nil {
 			jsonOut(w, map[string]string{"sound": sound})
 			return
