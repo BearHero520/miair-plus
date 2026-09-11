@@ -1,0 +1,20 @@
+--- a/shairport.c
++++ b/shairport.c
+@@ -2672,6 +2672,9 @@
+ 
+ #endif
+ 
++  // Preserve a port selected in the configuration file or on the command line.
++  // A zero port means no explicit port was selected.
++  if (config.port == 0) {
+ #ifdef CONFIG_AIRPLAY_2
+   if (config.service_type == APST_airplay2) {
+     config.port = 7000;
+@@ -2681,6 +2684,7 @@
+ #else
+   config.port = 5000;
+ #endif
++  }
+ 
+ #ifdef CONFIG_AIRPLAY_2
+   if (config.service_type == APST_airplay2) {

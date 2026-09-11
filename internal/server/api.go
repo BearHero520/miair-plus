@@ -26,7 +26,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.6"
+const Version = "2.0.8"
 
 type API struct {
 	Store    *config.Store
@@ -396,14 +396,14 @@ func (a *API) status() map[string]any {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	s := a.Store.Snapshot()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "go_version": runtime.Version(), "arch": runtime.GOARCH, "dlna_running": running, "renderers_count": count, "hostname": host, "dlna_port": port, "has_account": s.Xiaomi.UserID != "", "logged_in": s.Xiaomi.ServiceToken != "", "uptime_seconds": time.Since(a.started).Seconds(), "memory_mb": float64(memory.Sys) / (1 << 20), "memory_source": "go_runtime", "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_available": codec}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "go_version": runtime.Version(), "arch": runtime.GOARCH, "dlna_running": running, "renderers_count": count, "hostname": host, "dlna_port": port, "has_account": s.Xiaomi.UserID != "", "logged_in": s.Xiaomi.ServiceToken != "", "uptime_seconds": time.Since(a.started).Seconds(), "memory_mb": float64(memory.Sys) / (1 << 20), "memory_source": "go_runtime", "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "airplay2_port": s.AirPlay2Port, "ffmpeg_available": codec}
 }
 func (a *API) settings() map[string]any {
 	ap2Running, ap2Error := a.Manager.AirPlay2Info()
 	ffmpegResolved, ffmpegSource := a.Manager.FFmpegInfo()
 	s := a.Store.Snapshot()
 	_, _, n, running, codec := a.Manager.Info()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "auto_check_update": s.AutoCheckUpdate, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_resolved": ffmpegResolved, "ffmpeg_source": ffmpegSource, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "auto_check_update": s.AutoCheckUpdate, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "airplay2_port": s.AirPlay2Port, "ffmpeg_path": s.FFmpeg, "ffmpeg_resolved": ffmpegResolved, "ffmpeg_source": ffmpegSource, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
 }
 
 type speakerPatch struct {
@@ -421,6 +421,7 @@ type settingsPatch struct {
 	Volume          *int                    `json:"default_volume"`
 	AirPlay         *bool                   `json:"airplay_enabled"`
 	AirPlay2        *bool                   `json:"airplay2_enabled"`
+	AirPlay2Port    *int                    `json:"airplay2_port"`
 	AirPlay2Target  *string                 `json:"airplay2_target"`
 	FFmpeg          *string                 `json:"ffmpeg_path"`
 	AudioID         *string                 `json:"default_audio_id"`
@@ -476,6 +477,12 @@ func (p settingsPatch) apply(s *config.State) error {
 	}
 	if p.AirPlay2 != nil {
 		s.AirPlay2 = *p.AirPlay2
+	}
+	if p.AirPlay2Port != nil {
+		if *p.AirPlay2Port < 1024 || *p.AirPlay2Port > 65535 {
+			return errors.New("AirPlay 2 端口范围为 1024–65535")
+		}
+		s.AirPlay2Port = *p.AirPlay2Port
 	}
 	if p.AirPlay2Target != nil {
 		if *p.AirPlay2Target != "" {

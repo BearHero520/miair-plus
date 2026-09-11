@@ -8,9 +8,11 @@
    <template v-if="form.airplay_enabled">
     <n-form-item label="使用 AirPlay 2 接收组件（预览）"><n-switch v-model:value="form.airplay2_enabled"/></n-form-item>
     <template v-if="form.airplay2_enabled">
+     <n-form-item label="AirPlay 2 TCP 端口"><n-input-number v-model:value="form.airplay2_port" :min="1024" :max="65535" :precision="0" placeholder="默认 7000"/></n-form-item>
+     <n-text depth="3">默认 7000；如被占用可改为 7001 等空闲端口。请确保防火墙允许该 TCP 端口，保存后重新连接 AirPlay。</n-text>
      <n-form-item label="AirPlay 2 目标音箱"><n-select v-model:value="form.airplay2_target" :options="speakerOptions"/></n-form-item>
      <n-alert :type="form.airplay2_error ? 'warning' : form.airplay2_running ? 'success' : 'info'">{{ form.airplay2_error || (form.airplay2_running ? '原生接收组件已就绪，等待手机投送' : '保存后在后台启动接收组件') }}</n-alert>
-     <n-text depth="3">一个 AirPlay 2 入口对应所选音箱，其余音箱保留传统 AirPlay。所有音箱的 DLNA 独立可用。切换目标或名称会重建 AirPlay 2 连接；不支持屏幕镜像，跨小米音箱的同步多房间播放不作保证。</n-text>
+     <n-text depth="3">一个 AirPlay 2 入口对应所选音箱，其余音箱保留传统 AirPlay。所有音箱的 DLNA 独立可用。切换目标、名称或端口会重建 AirPlay 2 连接；不支持屏幕镜像，跨小米音箱的同步多房间播放不作保证。</n-text>
     </template>
     <n-text v-else depth="3">传统 AirPlay 支持 RAOP / ALAC、L16 音频。启用 AirPlay 2 可使用安装包内的 Shairport Sync 接收组件。</n-text>
    </template>
@@ -37,10 +39,10 @@ import ConfigBackupCard from '@/components/ConfigBackupCard.vue'
 import {useUpdateStore} from '@/stores/updates'
 import {useAppStore} from '@/stores/app'
 const app=useAppStore(),message=useMessage(),loading=ref(false),saving=ref(false),loaded=ref(false)
-const form=reactive({hostname:'',dlna_port:8311,airplay_enabled:true,airplay2_enabled:false,airplay2_target:'',airplay2_running:false,airplay2_error:'',speakers:{} as Record<string,{enabled:boolean;name:string;dlna_name:string}>,ffmpeg_path:'',ffmpeg_available:false,ffmpeg_source:'missing',ffmpeg_resolved:'',auto_play_on_set_uri:true,auto_restart:true,default_volume:40,default_audio_id:'',version:'',engine_version:''})
+const form=reactive({hostname:'',dlna_port:8311,airplay_enabled:true,airplay2_enabled:false,airplay2_port:7000,airplay2_target:'',airplay2_running:false,airplay2_error:'',speakers:{} as Record<string,{enabled:boolean;name:string;dlna_name:string}>,ffmpeg_path:'',ffmpeg_available:false,ffmpeg_source:'missing',ffmpeg_resolved:'',auto_play_on_set_uri:true,auto_restart:true,default_volume:40,default_audio_id:'',version:'',engine_version:''})
 const speakerOptions=computed(()=>[{label:'自动选择第一台已启用音箱',value:''},...Object.entries(form.speakers).filter(([,s])=>s.enabled).map(([did,s])=>({label:s.dlna_name||s.name,value:did}))])
 async function load(){loading.value=true;try{Object.assign(form,await fetchSettings());loaded.value=true}catch(e:any){message.error(e.response?.data?.detail||'读取失败')}finally{loading.value=false}}
-async function save(){saving.value=true;try{const {speakers,...patch}=form;delete (patch as Record<string,unknown>).auto_check_update;await saveSettings(patch);message.success('已保存，后台正在应用设置')}catch(e:any){message.error(e.response?.data?.detail||'保存失败')}finally{saving.value=false}}
+async function save(){if(!Number.isInteger(form.airplay2_port)||form.airplay2_port<1024||form.airplay2_port>65535){message.error("AirPlay 2 端口范围为 1024–65535");return} saving.value=true;try{const {speakers,...patch}=form;delete (patch as Record<string,unknown>).auto_check_update;await saveSettings(patch);message.success('已保存，后台正在应用设置')}catch(e:any){message.error(e.response?.data?.detail||'保存失败')}finally{saving.value=false}}
 async function reloadImported(){await load();await useUpdateStore().automatic()}
 onMounted(load)
 const timer=setInterval(async()=>{try{const s=await fetchSettings();form.airplay2_running=!!s.airplay2_running;form.airplay2_error=s.airplay2_error||''}catch{}},5000)

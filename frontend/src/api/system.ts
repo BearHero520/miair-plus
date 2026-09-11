@@ -11,6 +11,7 @@ export interface SpeakerSetting {
 
 export interface Settings {
   auto_check_update: boolean
+  airplay2_port: number
   airplay2_running?: boolean
   airplay2_error?: string
   version: string

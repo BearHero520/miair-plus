@@ -9,7 +9,7 @@
 - 代理：Range 转发、HEAD 降级、过期签名、目标地址限制、音频环形缓冲容量。
 - RAOP：公开密钥挑战响应、SDP 与 RTP 异常输入、序号回绕、乱序重排与丢包恢复、NTP 时间。
 - FFmpeg 集成：生成 ALAC 样本，将压缩包经过 Go 构造的 fragmented MP4 再解码，验证有效音频输出。
-- AirPlay 2：在 amd64 / arm64 Debian 构建环境中，以普通用户验证真实 NQPTP、Shairport Sync 的启动、中文名称配置、RTSP 响应与退出清理；PCM 管道和会话结束有独立测试。尚无 Apple 发送端到小爱音箱的实机结果。
+- AirPlay 2：在 amd64 / arm64 Debian 构建环境中，以普通用户验证真实 NQPTP、Shairport Sync 的启动、中文名称配置、RTSP 响应与退出清理；2.0.8 已增加默认 TCP 7000 被占用时，自定义 TCP 17001 的 RTSP 响应及 Bonjour 广播端口验证，两个架构均通过。PCM 管道和会话结束有独立测试。尚无 Apple 发送端到小爱音箱的实机结果。
 - CI：Linux `go vet`、`go test -race`、前端类型检查与打包、amd64 / arm64 编译。
 
 ## 必须真机验证
@@ -25,6 +25,6 @@
 
 ## 排查顺序
 
-先看账号与设备列表，再检查 NAS IPv4、端口冲突和局域网隔离。DLNA 能发现但不能播放时，在音箱页面切换兼容模式。AirPlay 不出现时检查 FFmpeg 路径和 UDP 5353。AirPlay 2 查看设置页错误和组件日志，检查系统 Avahi / D-Bus、TCP 7000、UDP 319/320 及 NQPTP 的低端口权限。不能与另一个占用相同 PTP 端口的接收器同时运行；本应用不会结束其他应用进程。
+先看账号与设备列表，再检查 NAS IPv4、端口冲突和局域网隔离。DLNA 能发现但不能播放时，在音箱页面切换兼容模式。AirPlay 不出现时检查 FFmpeg 路径和 UDP 5353。AirPlay 2 查看设置页错误和组件日志，检查系统 Avahi / D-Bus、所配置的 TCP 端口（默认 7000，可在设置中修改）、UDP 319/320 及 NQPTP 的低端口权限。不能与另一个占用相同 PTP 端口的接收器同时运行；本应用不会结束其他应用进程。
 
 “日志”展示最近 1000 条结构化记录，支持级别、模块与关键字筛选，最新记录在上方。记录在 `${TRIM_PKGVAR}/data/events.jsonl` 持久化，单文件 2 MiB 并保留一个轮转备份；重启后恢复最近记录。诊断报告包含版本、架构、组件检查及脱敏事件，不包含账号配置。fnOS 启动与日志存储错误仍写入 `${TRIM_PKGVAR}/app.log`。反馈时附软件版本、NAS 架构、音箱 hardware 型号、发送 App 及失败步骤；不要附小米 Cookie、passToken 或整个配置文件。

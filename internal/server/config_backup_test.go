@@ -19,6 +19,7 @@ func TestConfigBackupRoundTripAndValidation(t *testing.T) {
 		t.Fatal(w.Code)
 	}
 	_ = a.Store.Update(func(s *config.State) error {
+		s.AirPlay2Port = 17001
 		s.Xiaomi.PassToken = "private-account-token"
 		s.Speakers["speaker"] = config.Speaker{DID: "speaker", Name: "Speaker", Enabled: true}
 		s.Alarms = []config.Alarm{{ID: config.Random(16), Name: "Wake", Time: "07:00", Timezone: "Asia/Shanghai", Rule: "weekly", Days: 127, Speaker: "speaker", Sound: "wake.mp3", Volume: 40, Minutes: 1, Enabled: true}}
@@ -37,6 +38,11 @@ func TestConfigBackupRoundTripAndValidation(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &backup); err != nil {
 		t.Fatal(err)
 	}
+	if backup.Settings.AirPlay2Port == nil || *backup.Settings.AirPlay2Port != 17001 {
+		t.Fatal("port missing in backup")
+	}
+	newPort := 17002
+	backup.Settings.AirPlay2Port = &newPort
 	saved := a.Store.Snapshot()
 	port := 9411
 	backup.Settings.Port = &port
@@ -46,7 +52,7 @@ func TestConfigBackupRoundTripAndValidation(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	after := a.Store.Snapshot()
-	if after.DLNAPort != port || len(after.Alarms) != 1 || after.Alarms[0].Enabled || !reflect.DeepEqual(after.Xiaomi, saved.Xiaomi) || after.Secret != saved.Secret || after.PasswordHash != saved.PasswordHash || !a.valid(token) {
+	if after.AirPlay2Port != 17002 || after.DLNAPort != port || len(after.Alarms) != 1 || after.Alarms[0].Enabled || !reflect.DeepEqual(after.Xiaomi, saved.Xiaomi) || after.Secret != saved.Secret || after.PasswordHash != saved.PasswordHash || !a.valid(token) {
 		t.Fatal("round trip changed protected data or failed to restore")
 	}
 	invalid := []string{`{}`, string(data) + `{}`, strings.Replace(string(data), `"schema_version":1`, `"schema_version":9`, 1), strings.Replace(string(data), `"dlna_port":9411`, `"dlna_port":-1`, 1), strings.Replace(string(data), `"wake.mp3"`, `"../private.mp3"`, 1), strings.Replace(string(data), `"settings":{`, `"settings":{"password_hash":"injected",`, 1)}
@@ -71,6 +77,7 @@ func TestImportSkipsUnknownSpeakerAndPersistsUpdatePreference(t *testing.T) {
 	enabled := false
 	name := "Room"
 	unknown := "other-device"
+	backup.Settings.AirPlay2Port = nil // Old backups preserve the current port.
 	backup.Settings.AutoCheckUpdate = &enabled
 	backup.Settings.Speakers[unknown] = speakerPatch{Name: &name}
 	backup.Settings.AirPlay2Target = &unknown
@@ -83,7 +90,40 @@ func TestImportSkipsUnknownSpeakerAndPersistsUpdatePreference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if reopened.Snapshot().AutoCheckUpdate || reopened.Snapshot().AirPlay2Target != "" || len(reopened.Snapshot().Speakers) != 0 {
+	if reopened.Snapshot().AirPlay2Port != 7000 || reopened.Snapshot().AutoCheckUpdate || reopened.Snapshot().AirPlay2Target != "" || len(reopened.Snapshot().Speakers) != 0 {
 		t.Fatal("import did not persist")
+	}
+}
+
+func TestSettingsAirPlay2Port(t *testing.T) {
+	a := testAPI(t)
+	token := setupToken(t, a)
+	for _, body := range []string{`{"airplay2_port":1023}`, `{"airplay2_port":65536}`, `{"airplay2_port":0}`, `{"airplay2_port":7001.5}`} {
+		before := a.Store.Snapshot()
+		w := callAPI(a, "POST", "settings", body, token)
+		if w.Code != 400 || !reflect.DeepEqual(before, a.Store.Snapshot()) {
+			t.Fatal("invalid port accepted", w.Code, w.Body.String())
+		}
+	}
+	w := callAPI(a, "POST", "settings", `{"airplay2_port":17001}`, token)
+	if w.Code != 200 {
+		t.Fatal(w.Body.String())
+	}
+	w = callAPI(a, "GET", "settings", "", token)
+	var settings struct {
+		Port int `json:"airplay2_port"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if w.Code != 200 || settings.Port != 17001 {
+		t.Fatal("custom port not returned", w.Body.String())
+	}
+	reopened, err := config.Open(a.Store.Directory())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Snapshot().AirPlay2Port != 17001 {
+		t.Fatal("custom port not saved")
 	}
 }

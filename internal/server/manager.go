@@ -195,7 +195,7 @@ func (m *Manager) Apply() error {
 	target := airPlay2Target(state)
 	key := ""
 	if target != "" {
-		key = target + "\x00" + state.Speakers[target].DisplayName() + "\x00" + ffmpeg
+		key = target + "\x00" + state.Speakers[target].DisplayName() + "\x00" + ffmpeg + fmt.Sprintf("\x00%d", state.AirPlay2Port)
 	}
 	if m.ap2 != nil && (key != m.ap2Key || !m.ap2.Alive()) {
 		m.ap2.Close()
@@ -263,7 +263,7 @@ func (m *Manager) Apply() error {
 	}
 	ap2Error := ""
 	if target != "" && m.ap2 == nil && !m.noDiscovery {
-		m.ap2, err = airplay2.Start(m.ctx, airplay2.Options{Host: host, Name: state.Speakers[target].DisplayName(), Directory: filepath.Join(m.store.Directory(), "airplay2"), Runtime: airplay2.RuntimeDir(), FFmpeg: ffmpeg, Target: m.Lookup(dlna.UUID(target)), Publish: m.publish})
+		m.ap2, err = airplay2.Start(m.ctx, airplay2.Options{Host: host, Port: state.AirPlay2Port, Name: state.Speakers[target].DisplayName(), Directory: filepath.Join(m.store.Directory(), "airplay2"), Runtime: airplay2.RuntimeDir(), FFmpeg: ffmpeg, Target: m.Lookup(dlna.UUID(target)), Publish: m.publish})
 		if err != nil {
 			ap2Error = err.Error()
 		} else {

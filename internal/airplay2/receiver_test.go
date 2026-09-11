@@ -23,8 +23,8 @@ func (*testTarget) SetVolume(context.Context, int) error                 { retur
 func (*testTarget) Metadata(string, string)                              {}
 
 func TestConfigurationEscapesNames(t *testing.T) {
-	s := configuration("客厅\"; port=9; //", "eth0", 12345)
-	if !strings.Contains(s, `name = "客厅\"; port=9; //";`) || !strings.Contains(s, "socket_port = 12345") {
+	s := configuration("客厅\"; port=9; //", "eth0", 17001, 12345)
+	if !strings.Contains(s, `name = "客厅\"; port=9; //";`) || !strings.Contains(s, "socket_port = 12345") || !strings.Contains(s, "port = 17001;") {
 		t.Fatal(s)
 	}
 }
@@ -97,6 +97,12 @@ func TestNativeReceiver(t *testing.T) {
 	if dir == "" {
 		t.Skip("native runtime integration is opt-in")
 	}
+	// Prove custom ports work even when the default is already occupied.
+	defaultPort, e := net.Listen("tcp4", "0.0.0.0:7000")
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer defaultPort.Close()
 	conn, e := net.Dial("udp4", "192.0.2.1:9")
 	if e != nil {
 		t.Fatal(e)
@@ -105,16 +111,16 @@ func TestNativeReceiver(t *testing.T) {
 	conn.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	r, e := Start(ctx, Options{Host: host, Name: "MiAir 测试 \"音箱\"", Directory: t.TempDir(), Runtime: dir, FFmpeg: filepath.Join(dir, "bin/ffmpeg"), Target: &testTarget{}, Publish: func(*media.Live) (string, func()) { return "http://test/live", func() {} }})
+	r, e := Start(ctx, Options{Host: host, Port: 17001, Name: "MiAir 测试 \"音箱\"", Directory: t.TempDir(), Runtime: dir, FFmpeg: filepath.Join(dir, "bin/ffmpeg"), Target: &testTarget{}, Publish: func(*media.Live) (string, func()) { return "http://test/live", func() {} }})
 	if e != nil {
 		t.Fatal(e)
 	}
+	defer r.Close()
 	if !r.Alive() {
 		t.Fatal(r.Error())
 	}
-	c, e := net.DialTimeout("tcp4", net.JoinHostPort(host, "7000"), time.Second)
+	c, e := net.DialTimeout("tcp4", net.JoinHostPort(host, "17001"), time.Second)
 	if e != nil {
-		r.Close()
 		t.Fatal(e)
 	}
 	_ = c.SetDeadline(time.Now().Add(3 * time.Second))
@@ -125,8 +131,24 @@ func TestNativeReceiver(t *testing.T) {
 	b := make([]byte, 4096)
 	n, e := c.Read(b)
 	c.Close()
-	r.Close()
 	if e != nil || !strings.Contains(string(b[:n]), "200 OK") {
 		t.Fatalf("RTSP response: %q (%v)", b[:n], e)
+	}
+	// Bonjour must advertise the same custom port that answered RTSP.
+	browseCtx, stopBrowse := context.WithTimeout(ctx, 5*time.Second)
+	defer stopBrowse()
+	advertised, err := exec.CommandContext(browseCtx, "avahi-browse", "-rp", "_airplay._tcp").CombinedOutput()
+	if err != nil && browseCtx.Err() == nil {
+		t.Fatalf("Bonjour browse: %v: %s", err, advertised)
+	}
+	found := false
+	for _, line := range strings.Split(string(advertised), "\n") {
+		fields := strings.Split(line, ";")
+		if len(fields) >= 9 && fields[0] == "=" && fields[7] == host && fields[8] == "17001" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("custom AirPlay 2 port not advertised: %s", advertised)
 	}
 }
