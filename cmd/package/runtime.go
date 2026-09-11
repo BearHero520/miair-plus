@@ -16,6 +16,15 @@ func verifyRuntime(dir, arch string) error {
 	if err != nil {
 		return err
 	}
+	// Do not package the old native runtime that silently ignores custom ports.
+	patch, err := os.ReadFile(filepath.Join(dir, "licenses", "shairport-sync-custom-port.patch"))
+	if err != nil {
+		return fmt.Errorf("native runtime needs the custom-port fix: %w", err)
+	}
+	expected, err := os.ReadFile(filepath.Join("scripts", "patches", "shairport-sync-custom-port.patch"))
+	if err != nil || string(patch) != string(expected) {
+		return fmt.Errorf("native custom-port patch does not match this build")
+	}
 	checked := map[string]bool{}
 	scan := bufio.NewScanner(strings.NewReader(string(b)))
 	for scan.Scan() {

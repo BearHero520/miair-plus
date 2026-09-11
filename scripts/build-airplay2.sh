@@ -19,6 +19,10 @@ export LD_LIBRARY_PATH=/opt/miair-audio/lib
 cd /build
 git clone --depth 1 --branch 5.5.1 https://github.com/mikebrady/shairport-sync.git
 cd shairport-sync
+# 5.5.1 overwrites an explicitly configured RTSP port during startup.
+git apply /workspace/scripts/patches/shairport-sync-custom-port.patch
+cp /workspace/scripts/patches/shairport-sync-custom-port.patch /out/licenses/
+cp /workspace/scripts/patches/shairport-sync-custom-port.patch /out/sources/
 autoreconf -fi
 ./configure --prefix=/opt/miair-airplay2 --sysconfdir=/etc --with-stdout --with-avahi --with-ssl=openssl --with-airplay-2 --with-soxr --with-metadata --with-metadata-multicast
 make -j"$(nproc)"

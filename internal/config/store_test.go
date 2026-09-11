@@ -80,3 +80,27 @@ func TestCorruptConfigNotOverwritten(t *testing.T) {
 		t.Fatal("corrupt original overwritten")
 	}
 }
+
+func TestAirPlay2PortMigrationAndPersistence(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "miair-plus.json"), []byte(`{"schema_version":1,"speakers":{}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.Snapshot().AirPlay2Port != 7000 {
+		t.Fatal("legacy port default missing")
+	}
+	if err = store.Update(func(s *State) error { s.AirPlay2Port = 17001; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Snapshot().AirPlay2Port != 17001 {
+		t.Fatal("custom port not persisted")
+	}
+}

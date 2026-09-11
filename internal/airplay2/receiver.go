@@ -26,6 +26,7 @@ import (
 
 type Options struct {
 	Host, Name, Directory, Runtime, FFmpeg string
+	Port                                   int
 	Target                                 airplay.Target
 	Publish                                func(*media.Live) (string, func())
 }
@@ -68,12 +69,12 @@ func interfaceName(host string) (string, error) {
 }
 
 // strconv.Quote produces libconfig-compatible strings for validated UTF-8 names.
-func configuration(name, iface string, port int) string {
-	return fmt.Sprintf(`general = { name = %s; interface = %s; port = 7000; output_backend = "stdout"; };
+func configuration(name, iface string, port, metadataPort int) string {
+	return fmt.Sprintf(`general = { name = %s; interface = %s; port = %d; output_backend = "stdout"; };
 stdout = { output_rate = 44100; output_format = "S16_BE"; output_channels = 2; };
 metadata = { enabled = "yes"; include_cover_art = "no"; socket_address = "127.0.0.1"; socket_port = %d; socket_msglength = 4096; };
 sessioncontrol = { active_state_timeout = 10.0; };
-`, strconv.Quote(name), strconv.Quote(iface), port)
+`, strconv.Quote(name), strconv.Quote(iface), port, metadataPort)
 }
 
 func (r *Receiver) fail(err error) {
@@ -97,6 +98,12 @@ func (r *Receiver) Alive() bool {
 }
 
 func Start(parent context.Context, o Options) (*Receiver, error) {
+	if o.Port == 0 {
+		o.Port = 7000
+	}
+	if o.Port < 1024 || o.Port > 65535 {
+		return nil, errors.New("AirPlay 2 端口范围为 1024–65535")
+	}
 	if runtime.GOOS != "linux" {
 		return nil, errors.New("AirPlay 2 原生接收组件仅支持 Linux NAS")
 	}
@@ -116,9 +123,9 @@ func Start(parent context.Context, o Options) (*Receiver, error) {
 		return nil, err
 	}
 	// Never connect to, kill, or claim another receiver already using our RTSP port.
-	probe, err := net.Listen("tcp4", net.JoinHostPort(o.Host, "7000"))
+	probe, err := net.Listen("tcp4", net.JoinHostPort(o.Host, strconv.Itoa(o.Port)))
 	if err != nil {
-		return nil, fmt.Errorf("AirPlay 2 TCP 7000 已占用: %w", err)
+		return nil, fmt.Errorf("AirPlay 2 TCP %d 无法监听，请检查端口占用: %w", o.Port, err)
 	}
 	probe.Close()
 	metadata, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
@@ -130,7 +137,7 @@ func Start(parent context.Context, o Options) (*Receiver, error) {
 		return nil, err
 	}
 	configPath := filepath.Join(o.Directory, "shairport-sync.conf")
-	if err = os.WriteFile(configPath, []byte(configuration(o.Name, iface, metadata.LocalAddr().(*net.UDPAddr).Port)), 0600); err != nil {
+	if err = os.WriteFile(configPath, []byte(configuration(o.Name, iface, o.Port, metadata.LocalAddr().(*net.UDPAddr).Port)), 0600); err != nil {
 		metadata.Close()
 		return nil, err
 	}
@@ -206,11 +213,11 @@ func Start(parent context.Context, o Options) (*Receiver, error) {
 			r.Close()
 			return nil, fmt.Errorf("AirPlay 2 启动失败: %s", r.Error())
 		case <-timer.C:
-			r.fail(errors.New("AirPlay 2 未在 TCP 7000 就绪"))
+			r.fail(fmt.Errorf("AirPlay 2 未在 TCP %d 就绪", o.Port))
 			r.Close()
 			return nil, errors.New(r.Error())
 		case <-ticker.C:
-			c, e := net.DialTimeout("tcp4", net.JoinHostPort(o.Host, "7000"), 100*time.Millisecond)
+			c, e := net.DialTimeout("tcp4", net.JoinHostPort(o.Host, strconv.Itoa(o.Port)), 100*time.Millisecond)
 			if e == nil {
 				c.Close()
 				return r, nil

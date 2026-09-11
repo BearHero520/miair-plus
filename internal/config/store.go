@@ -48,6 +48,7 @@ type State struct {
 	DLNAPort        int                `json:"dlna_port"`
 	AirPlay         bool               `json:"airplay_enabled"`
 	AirPlay2        bool               `json:"airplay2_enabled"`
+	AirPlay2Port    int                `json:"airplay2_port"`
 	AirPlay2Target  string             `json:"airplay2_target"`
 	AutoPlay        bool               `json:"auto_play_on_set_uri"`
 	AutoRecover     bool               `json:"auto_restart"`
@@ -75,7 +76,7 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	s := &Store{path: filepath.Join(dir, "miair-plus.json"), state: State{AutoCheckUpdate: true, Version: 1, Secret: Random(32), DLNAPort: 8311, AirPlay: true, AutoPlay: true, AutoRecover: true, DefaultVolume: 40, CacheMB: 32, AudioID: "1582971365183456177", Speakers: map[string]Speaker{}}}
+	s := &Store{path: filepath.Join(dir, "miair-plus.json"), state: State{AutoCheckUpdate: true, Version: 1, Secret: Random(32), DLNAPort: 8311, AirPlay2Port: 7000, AirPlay: true, AutoPlay: true, AutoRecover: true, DefaultVolume: 40, CacheMB: 32, AudioID: "1582971365183456177", Speakers: map[string]Speaker{}}}
 	b, err := os.ReadFile(s.path)
 	if err == nil {
 		if err = json.Unmarshal(b, &s.state); err != nil {

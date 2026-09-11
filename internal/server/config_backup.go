@@ -27,7 +27,7 @@ func (a *API) exportConfig(w http.ResponseWriter, r *http.Request) {
 	s := a.Store.Snapshot()
 	p := &settingsPatch{Hostname: &s.Hostname, Port: &s.DLNAPort, AutoPlay: &s.AutoPlay,
 		Recover: &s.AutoRecover, Volume: &s.DefaultVolume, AirPlay: &s.AirPlay,
-		AirPlay2: &s.AirPlay2, AirPlay2Target: &s.AirPlay2Target, FFmpeg: &s.FFmpeg,
+		AirPlay2: &s.AirPlay2, AirPlay2Port: &s.AirPlay2Port, AirPlay2Target: &s.AirPlay2Target, FFmpeg: &s.FFmpeg,
 		AudioID: &s.AudioID, AutoCheckUpdate: &s.AutoCheckUpdate, Speakers: map[string]speakerPatch{}}
 	for did, sp := range s.Speakers {
 		p.Speakers[did] = speakerPatch{Enabled: &sp.Enabled, Name: &sp.DLNAName, Compatibility: &sp.Compatibility}
