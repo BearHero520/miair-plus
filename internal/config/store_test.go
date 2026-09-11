@@ -8,6 +8,31 @@ import (
 	"testing"
 )
 
+func TestAutoCheckUpdateMigrationAndExplicitPreference(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"schema_version":1,"secret":"legacy-secret","dlna_port":8311,"speakers":{}}`
+	if err := os.WriteFile(filepath.Join(dir, "miair-plus.json"), []byte(legacy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !store.Snapshot().AutoCheckUpdate {
+		t.Fatal("legacy config should enable automatic update checks")
+	}
+	if err = store.Update(func(s *State) error { s.AutoCheckUpdate = false; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.Snapshot().AutoCheckUpdate {
+		t.Fatal("explicit disabled preference was not preserved")
+	}
+}
+
 func TestAtomicConfigAndConcurrentUpdates(t *testing.T) {
 	dir := t.TempDir()
 	s, err := Open(dir)

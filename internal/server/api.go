@@ -26,7 +26,7 @@ import (
 	"unicode/utf8"
 )
 
-const Version = "2.0.5"
+const Version = "2.0.6"
 
 type API struct {
 	Store    *config.Store
@@ -41,6 +41,7 @@ type API struct {
 	logins   []map[string]any
 	level    string
 	wsSlots  chan struct{}
+	updates  updateChecker
 }
 
 func NewAPI(ctx context.Context, s *config.Store, m *Manager, c *xiaomi.Client) *API {
@@ -338,7 +339,11 @@ func (a *API) api(w http.ResponseWriter, r *http.Request) {
 		a.Manager.Schedule()
 		jsonOut(w, map[string]any{"ok": true, "message": "已安排服务检查"})
 	case "GET system/check_update":
-		jsonOut(w, map[string]any{"current": Version, "latest": nil, "update_available": false, "release_url": "https://github.com/BearHero520/miair-plus/releases", "error": "请到 GitHub Releases 查看版本更新"})
+		jsonOut(w, a.updates.check(r.Context(), r.URL.Query().Get("force") == "true"))
+	case "GET settings/export":
+		a.exportConfig(w, r)
+	case "POST settings/import":
+		a.importConfig(w, r)
 	case "GET ws":
 		a.websocket(w, r, token)
 	default:
@@ -398,25 +403,28 @@ func (a *API) settings() map[string]any {
 	ffmpegResolved, ffmpegSource := a.Manager.FFmpegInfo()
 	s := a.Store.Snapshot()
 	_, _, n, running, codec := a.Manager.Info()
-	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_resolved": ffmpegResolved, "ffmpeg_source": ffmpegSource, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
+	return map[string]any{"version": Version, "engine_version": runtime.Version(), "hostname": s.Hostname, "dlna_port": s.DLNAPort, "auto_play_on_set_uri": s.AutoPlay, "auto_restart": s.AutoRecover, "auto_check_update": s.AutoCheckUpdate, "default_volume": s.DefaultVolume, "default_audio_id": s.AudioID, "airplay_enabled": s.AirPlay, "airplay2_enabled": s.AirPlay2, "airplay2_target": s.AirPlay2Target, "ffmpeg_path": s.FFmpeg, "ffmpeg_resolved": ffmpegResolved, "ffmpeg_source": ffmpegSource, "ffmpeg_available": codec, "has_account": s.Xiaomi.UserID != "", "speakers": s.Speakers, "airplay2_running": ap2Running, "airplay2_error": ap2Error, "mi_did": "", "cookie": "", "dlna_running": running, "renderers_count": n, "need_use_play_music_api": []string{}}
+}
+
+type speakerPatch struct {
+	Enabled       *bool   `json:"enabled"`
+	Name          *string `json:"dlna_name"`
+	Compatibility *bool   `json:"compatibility_mode"`
 }
 
 type settingsPatch struct {
-	Hostname       *string `json:"hostname"`
-	Port           *int    `json:"dlna_port"`
-	AutoPlay       *bool   `json:"auto_play_on_set_uri"`
-	Recover        *bool   `json:"auto_restart"`
-	Volume         *int    `json:"default_volume"`
-	AirPlay        *bool   `json:"airplay_enabled"`
-	AirPlay2       *bool   `json:"airplay2_enabled"`
-	AirPlay2Target *string `json:"airplay2_target"`
-	FFmpeg         *string `json:"ffmpeg_path"`
-	AudioID        *string `json:"default_audio_id"`
-	Speakers       map[string]struct {
-		Enabled       *bool   `json:"enabled"`
-		Name          *string `json:"dlna_name"`
-		Compatibility *bool   `json:"compatibility_mode"`
-	} `json:"speakers"`
+	AutoCheckUpdate *bool                   `json:"auto_check_update"`
+	Hostname        *string                 `json:"hostname"`
+	Port            *int                    `json:"dlna_port"`
+	AutoPlay        *bool                   `json:"auto_play_on_set_uri"`
+	Recover         *bool                   `json:"auto_restart"`
+	Volume          *int                    `json:"default_volume"`
+	AirPlay         *bool                   `json:"airplay_enabled"`
+	AirPlay2        *bool                   `json:"airplay2_enabled"`
+	AirPlay2Target  *string                 `json:"airplay2_target"`
+	FFmpeg          *string                 `json:"ffmpeg_path"`
+	AudioID         *string                 `json:"default_audio_id"`
+	Speakers        map[string]speakerPatch `json:"speakers"`
 }
 
 func (a *API) saveSettings(w http.ResponseWriter, r *http.Request) {
@@ -424,77 +432,7 @@ func (a *API) saveSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &p) {
 		return
 	}
-	err := a.Store.Update(func(s *config.State) error {
-		if p.Hostname != nil {
-			if *p.Hostname != "" {
-				if _, err := LANHost(*p.Hostname); err != nil {
-					return err
-				}
-			}
-			s.Hostname = *p.Hostname
-		}
-		if p.Port != nil {
-			if *p.Port < 1024 || *p.Port > 65535 {
-				return errors.New("端口范围为 1024–65535")
-			}
-			s.DLNAPort = *p.Port
-		}
-		if p.Volume != nil {
-			if *p.Volume < 0 || *p.Volume > 100 {
-				return errors.New("音量范围为 0–100")
-			}
-			s.DefaultVolume = *p.Volume
-		}
-		if p.AutoPlay != nil {
-			s.AutoPlay = *p.AutoPlay
-		}
-		if p.Recover != nil {
-			s.AutoRecover = *p.Recover
-		}
-		if p.AirPlay != nil {
-			s.AirPlay = *p.AirPlay
-		}
-		if p.AirPlay2 != nil {
-			s.AirPlay2 = *p.AirPlay2
-		}
-		if p.AirPlay2Target != nil {
-			if *p.AirPlay2Target != "" {
-				if _, ok := s.Speakers[*p.AirPlay2Target]; !ok {
-					return errors.New("AirPlay 2 目标音箱不存在")
-				}
-			}
-			s.AirPlay2Target = *p.AirPlay2Target
-		}
-		if p.FFmpeg != nil {
-			s.FFmpeg = *p.FFmpeg
-		}
-		if p.AudioID != nil {
-			if len(*p.AudioID) > 64 {
-				return errors.New("audioID 过长")
-			}
-			s.AudioID = *p.AudioID
-		}
-		for did, change := range p.Speakers {
-			sp, ok := s.Speakers[did]
-			if !ok {
-				return errors.New("请先从小米账号刷新设备列表")
-			}
-			if change.Enabled != nil {
-				sp.Enabled = *change.Enabled
-			}
-			if change.Compatibility != nil {
-				sp.Compatibility = *change.Compatibility
-			}
-			if change.Name != nil {
-				if !validName(*change.Name) {
-					return errors.New("名称格式错误")
-				}
-				sp.DLNAName = *change.Name
-			}
-			s.Speakers[did] = sp
-		}
-		return nil
-	})
+	err := a.Store.Update(p.apply)
 	if err != nil {
 		fail(w, 400, err)
 		return
@@ -502,6 +440,80 @@ func (a *API) saveSettings(w http.ResponseWriter, r *http.Request) {
 	a.Manager.Schedule()
 	diagnostics.Event("info", "设置", "设置已保存，后台应用中", nil)
 	jsonOut(w, map[string]any{"ok": true, "message": "已保存，服务将在后台更新"})
+}
+func (p settingsPatch) apply(s *config.State) error {
+	if p.AutoCheckUpdate != nil {
+		s.AutoCheckUpdate = *p.AutoCheckUpdate
+	}
+	if p.Hostname != nil {
+		if *p.Hostname != "" {
+			if _, err := LANHost(*p.Hostname); err != nil {
+				return err
+			}
+		}
+		s.Hostname = *p.Hostname
+	}
+	if p.Port != nil {
+		if *p.Port < 1024 || *p.Port > 65535 {
+			return errors.New("端口范围为 1024–65535")
+		}
+		s.DLNAPort = *p.Port
+	}
+	if p.Volume != nil {
+		if *p.Volume < 0 || *p.Volume > 100 {
+			return errors.New("音量范围为 0–100")
+		}
+		s.DefaultVolume = *p.Volume
+	}
+	if p.AutoPlay != nil {
+		s.AutoPlay = *p.AutoPlay
+	}
+	if p.Recover != nil {
+		s.AutoRecover = *p.Recover
+	}
+	if p.AirPlay != nil {
+		s.AirPlay = *p.AirPlay
+	}
+	if p.AirPlay2 != nil {
+		s.AirPlay2 = *p.AirPlay2
+	}
+	if p.AirPlay2Target != nil {
+		if *p.AirPlay2Target != "" {
+			if _, ok := s.Speakers[*p.AirPlay2Target]; !ok {
+				return errors.New("AirPlay 2 目标音箱不存在")
+			}
+		}
+		s.AirPlay2Target = *p.AirPlay2Target
+	}
+	if p.FFmpeg != nil {
+		s.FFmpeg = *p.FFmpeg
+	}
+	if p.AudioID != nil {
+		if len(*p.AudioID) > 64 {
+			return errors.New("audioID 过长")
+		}
+		s.AudioID = *p.AudioID
+	}
+	for did, change := range p.Speakers {
+		sp, ok := s.Speakers[did]
+		if !ok {
+			return errors.New("请先从小米账号刷新设备列表")
+		}
+		if change.Enabled != nil {
+			sp.Enabled = *change.Enabled
+		}
+		if change.Compatibility != nil {
+			sp.Compatibility = *change.Compatibility
+		}
+		if change.Name != nil {
+			if *change.Name != "" && !validName(*change.Name) {
+				return errors.New("名称格式错误")
+			}
+			sp.DLNAName = *change.Name
+		}
+		s.Speakers[did] = sp
+	}
+	return nil
 }
 func (a *API) devices(w http.ResponseWriter, r *http.Request) {
 	devices, err := a.Client.Devices(r.Context())

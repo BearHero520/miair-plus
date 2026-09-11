@@ -37,25 +37,26 @@ type Credentials struct {
 	IssuedAt     int64  `json:"issued_at"`
 }
 type State struct {
-	Alarms         []Alarm            `json:"alarms,omitempty"`
-	Version        int                `json:"schema_version"`
-	Username       string             `json:"username"`
-	PasswordHash   string             `json:"password_hash"`
-	Secret         string             `json:"secret"`
-	AuthRevision   int                `json:"auth_revision"`
-	Hostname       string             `json:"hostname"`
-	DLNAPort       int                `json:"dlna_port"`
-	AirPlay        bool               `json:"airplay_enabled"`
-	AirPlay2       bool               `json:"airplay2_enabled"`
-	AirPlay2Target string             `json:"airplay2_target"`
-	AutoPlay       bool               `json:"auto_play_on_set_uri"`
-	AutoRecover    bool               `json:"auto_restart"`
-	DefaultVolume  int                `json:"default_volume"`
-	CacheMB        int                `json:"cache_mb"`
-	FFmpeg         string             `json:"ffmpeg_path"`
-	AudioID        string             `json:"default_audio_id"`
-	Xiaomi         Credentials        `json:"xiaomi"`
-	Speakers       map[string]Speaker `json:"speakers"`
+	AutoCheckUpdate bool               `json:"auto_check_update"`
+	Alarms          []Alarm            `json:"alarms,omitempty"`
+	Version         int                `json:"schema_version"`
+	Username        string             `json:"username"`
+	PasswordHash    string             `json:"password_hash"`
+	Secret          string             `json:"secret"`
+	AuthRevision    int                `json:"auth_revision"`
+	Hostname        string             `json:"hostname"`
+	DLNAPort        int                `json:"dlna_port"`
+	AirPlay         bool               `json:"airplay_enabled"`
+	AirPlay2        bool               `json:"airplay2_enabled"`
+	AirPlay2Target  string             `json:"airplay2_target"`
+	AutoPlay        bool               `json:"auto_play_on_set_uri"`
+	AutoRecover     bool               `json:"auto_restart"`
+	DefaultVolume   int                `json:"default_volume"`
+	CacheMB         int                `json:"cache_mb"`
+	FFmpeg          string             `json:"ffmpeg_path"`
+	AudioID         string             `json:"default_audio_id"`
+	Xiaomi          Credentials        `json:"xiaomi"`
+	Speakers        map[string]Speaker `json:"speakers"`
 }
 type Store struct {
 	mu    sync.RWMutex
@@ -74,11 +75,17 @@ func Open(dir string) (*Store, error) {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, err
 	}
-	s := &Store{path: filepath.Join(dir, "miair-plus.json"), state: State{Version: 1, Secret: Random(32), DLNAPort: 8311, AirPlay: true, AutoPlay: true, AutoRecover: true, DefaultVolume: 40, CacheMB: 32, AudioID: "1582971365183456177", Speakers: map[string]Speaker{}}}
+	s := &Store{path: filepath.Join(dir, "miair-plus.json"), state: State{AutoCheckUpdate: true, Version: 1, Secret: Random(32), DLNAPort: 8311, AirPlay: true, AutoPlay: true, AutoRecover: true, DefaultVolume: 40, CacheMB: 32, AudioID: "1582971365183456177", Speakers: map[string]Speaker{}}}
 	b, err := os.ReadFile(s.path)
 	if err == nil {
 		if err = json.Unmarshal(b, &s.state); err != nil {
 			return nil, errors.New("配置文件损坏，请从备份恢复；程序未覆盖原文件")
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(b, &fields) == nil {
+			if _, exists := fields["auto_check_update"]; !exists {
+				s.state.AutoCheckUpdate = true
+			}
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err

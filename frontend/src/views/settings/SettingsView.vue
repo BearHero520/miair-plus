@@ -24,18 +24,24 @@
    <n-space><n-button type="primary" :loading="saving" @click="save">保存设置</n-button><n-button :loading="loading" @click="load">重新读取</n-button></n-space>
   </n-space></n-form></n-spin></n-card>
 
+  <UpdateCard/>
+  <ConfigBackupCard :disabled="saving || loading" @imported="reloadImported"/>
  </n-space>
 </template>
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,reactive,ref} from 'vue'
 import {NSpace,NCard,NSpin,NForm,NFormItem,NInput,NInputNumber,NSwitch,NSelect,NButton,NText,NAlert,NRadioGroup,NRadioButton,NTag,NCollapse,NCollapseItem,useMessage} from 'naive-ui'
 import {fetchSettings,saveSettings} from '@/api/system'
+import UpdateCard from '@/components/UpdateCard.vue'
+import ConfigBackupCard from '@/components/ConfigBackupCard.vue'
+import {useUpdateStore} from '@/stores/updates'
 import {useAppStore} from '@/stores/app'
 const app=useAppStore(),message=useMessage(),loading=ref(false),saving=ref(false),loaded=ref(false)
 const form=reactive({hostname:'',dlna_port:8311,airplay_enabled:true,airplay2_enabled:false,airplay2_target:'',airplay2_running:false,airplay2_error:'',speakers:{} as Record<string,{enabled:boolean;name:string;dlna_name:string}>,ffmpeg_path:'',ffmpeg_available:false,ffmpeg_source:'missing',ffmpeg_resolved:'',auto_play_on_set_uri:true,auto_restart:true,default_volume:40,default_audio_id:'',version:'',engine_version:''})
 const speakerOptions=computed(()=>[{label:'自动选择第一台已启用音箱',value:''},...Object.entries(form.speakers).filter(([,s])=>s.enabled).map(([did,s])=>({label:s.dlna_name||s.name,value:did}))])
 async function load(){loading.value=true;try{Object.assign(form,await fetchSettings());loaded.value=true}catch(e:any){message.error(e.response?.data?.detail||'读取失败')}finally{loading.value=false}}
-async function save(){saving.value=true;try{const {speakers,...patch}=form;await saveSettings(patch);message.success('已保存，后台正在应用设置')}catch(e:any){message.error(e.response?.data?.detail||'保存失败')}finally{saving.value=false}}
+async function save(){saving.value=true;try{const {speakers,...patch}=form;delete (patch as Record<string,unknown>).auto_check_update;await saveSettings(patch);message.success('已保存，后台正在应用设置')}catch(e:any){message.error(e.response?.data?.detail||'保存失败')}finally{saving.value=false}}
+async function reloadImported(){await load();await useUpdateStore().automatic()}
 onMounted(load)
 const timer=setInterval(async()=>{try{const s=await fetchSettings();form.airplay2_running=!!s.airplay2_running;form.airplay2_error=s.airplay2_error||''}catch{}},5000)
 onUnmounted(()=>clearInterval(timer))

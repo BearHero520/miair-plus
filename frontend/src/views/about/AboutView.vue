@@ -6,6 +6,7 @@
    <p>让小爱音箱连接更多音乐。</p>
    <p>DLNA / AirPlay 音乐投送，自定义音乐闹钟。<br>支持音乐上传、NAS 选曲，以及工作日和节假日提醒。</p>
   </section>
+  <div style="margin-top:20px"><UpdateCard/></div>
   <section class="glass about-details" aria-label="开发者与项目信息">
    <div class="about-row"><span>开发者</span><a href="https://github.com/BearHero520" target="_blank" rel="noopener noreferrer">BearHero520 ↗</a></div>
    <a class="about-row about-link" href="https://github.com/BearHero520/miair-plus" target="_blank" rel="noopener noreferrer"><span>项目主页</span><strong>GitHub ↗</strong></a>
@@ -25,6 +26,7 @@
  </div>
 </template>
 <script setup lang="ts">
+import UpdateCard from '@/components/UpdateCard.vue'
 import {NIcon,NButton,useMessage} from 'naive-ui'
 import {ref} from 'vue'
 import {fnos,fnosHost,refreshFnosHost,openFnosSettings} from '@/utils/fnos'

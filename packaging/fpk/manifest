@@ -1,5 +1,5 @@
 appname=miair-plus
-version=2.0.5
+version=2.0.6
 display_name=MiAir Plus
 desc=小爱音箱 DLNA / AirPlay 音乐投送与自定义音乐闹钟。支持音乐上传、NAS 选曲、工作日与节假日规则，内置 FFmpeg，x86_64 / ARM64 通用。AirPlay 2 为预览功能。
 platform=all

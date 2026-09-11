@@ -10,6 +10,7 @@ export interface SpeakerSetting {
 }
 
 export interface Settings {
+  auto_check_update: boolean
   airplay2_running?: boolean
   airplay2_error?: string
   version: string
@@ -110,6 +111,7 @@ export async function downloadLogs(): Promise<void> {
 }
 
 export interface UpdateInfo {
+  checked_at?: string
   current: string
   latest: string | null
   update_available: boolean
@@ -120,8 +122,8 @@ export interface UpdateInfo {
   error?: string
 }
 
-export async function checkUpdate(): Promise<UpdateInfo> {
-  const { data } = await http.get('/system/check_update')
+export async function checkUpdate(force = false): Promise<UpdateInfo> {
+  const { data } = await http.get('/system/check_update', { params: { force } })
   return data
 }
 
@@ -143,4 +145,29 @@ export interface NotifyTestResult {
 export async function testNotify(): Promise<NotifyTestResult> {
   const { data } = await http.post('/system/notify/test')
   return data
+}
+
+export interface ConfigBackup {
+  format: 'miair-plus'
+  schema_version: number
+  app_version: string
+  exported_at: string
+  settings: Record<string, unknown>
+  alarms: unknown[]
+}
+
+export async function exportConfig(): Promise<void> {
+  const {data} = await http.get('/settings/export')
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'}))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `miair-plus-config-${new Date().toISOString().slice(0,10)}.json`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function importConfig(backup: ConfigBackup): Promise<{message: string; skipped_speakers: number}> {
+  return (await http.post('/settings/import', backup)).data
 }
