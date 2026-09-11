@@ -137,8 +137,8 @@ func TestNativeReceiver(t *testing.T) {
 	// Bonjour must advertise the same custom port that answered RTSP.
 	browseCtx, stopBrowse := context.WithTimeout(ctx, 5*time.Second)
 	defer stopBrowse()
-	advertised, err := exec.CommandContext(browseCtx, "avahi-browse", "-rtp", "_airplay._tcp").CombinedOutput()
-	if err != nil {
+	advertised, err := exec.CommandContext(browseCtx, "avahi-browse", "-rp", "_airplay._tcp").CombinedOutput()
+	if err != nil && browseCtx.Err() == nil {
 		t.Fatalf("Bonjour browse: %v: %s", err, advertised)
 	}
 	found := false

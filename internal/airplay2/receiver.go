@@ -70,7 +70,7 @@ func interfaceName(host string) (string, error) {
 
 // strconv.Quote produces libconfig-compatible strings for validated UTF-8 names.
 func configuration(name, iface string, port, metadataPort int) string {
-	return fmt.Sprintf(`general = { name = %s; interface = %s; port = %d; output_backend = "stdout"; };
+	return fmt.Sprintf(`general = { name = %s; interface = %s; port = %d; service_type = "airplay2"; output_backend = "stdout"; };
 stdout = { output_rate = 44100; output_format = "S16_BE"; output_channels = 2; };
 metadata = { enabled = "yes"; include_cover_art = "no"; socket_address = "127.0.0.1"; socket_port = %d; socket_msglength = 4096; };
 sessioncontrol = { active_state_timeout = 10.0; };
@@ -189,7 +189,7 @@ func Start(parent context.Context, o Options) (*Receiver, error) {
 		return abort(errors.New(r.Error()))
 	case <-time.After(600 * time.Millisecond):
 	}
-	receiver := exec.CommandContext(ctx, filepath.Join(o.Runtime, "bin/shairport-sync"), "-c", configPath)
+	receiver := exec.CommandContext(ctx, filepath.Join(o.Runtime, "bin/shairport-sync"), "-u", "-v", "-c", configPath)
 	pcm, err := receiver.StdoutPipe()
 	if err != nil {
 		return abort(err)
