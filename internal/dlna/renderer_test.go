@@ -17,6 +17,7 @@ type fakeController struct {
 	calls   []string
 	started chan struct{}
 	fail    bool
+	volumes []int
 }
 
 func (f *fakeController) Play(ctx context.Context, s config.Speaker, u string) error {
@@ -44,7 +45,12 @@ func (f *fakeController) Operation(ctx context.Context, s config.Speaker, a stri
 	f.calls = append(f.calls, a)
 	return nil
 }
-func (f *fakeController) Volume(context.Context, config.Speaker, int) error { return nil }
+func (f *fakeController) Volume(_ context.Context, _ config.Speaker, volume int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.volumes = append(f.volumes, volume)
+	return nil
+}
 func (f *fakeController) Status(context.Context, config.Speaker) (map[string]any, error) {
 	return nil, nil
 }
@@ -156,4 +162,29 @@ func TestRenameDoesNotWaitForCloud(t *testing.T) {
 	}
 	r.Close()
 	<-done
+}
+
+func TestAirPlayAppliesSpeakerVolume(t *testing.T) {
+	for _, volume := range []int{0, 1, 40} {
+		f := &fakeController{}
+		r := rendererForTest(f)
+		r.volume = volume
+		if err := r.StartAirPlay(context.Background(), "http://192.168.1.2/live/test", "AirPlay 2"); err != nil {
+			t.Fatal(err)
+		}
+		if len(f.volumes) != 1 || f.volumes[0] != volume {
+			t.Fatalf("speaker volume not applied: %v", f.volumes)
+		}
+		r.Close()
+	}
+	f := &fakeController{}
+	r := rendererForTest(f)
+	r.mute = true
+	defer r.Close()
+	if err := r.StartAirPlay(context.Background(), "http://192.168.1.2/live/test", "AirPlay 2"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.volumes) != 1 || f.volumes[0] != 0 {
+		t.Fatal("explicit mute was lost")
+	}
 }

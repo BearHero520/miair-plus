@@ -43,6 +43,7 @@ func TestConfigBackupRoundTripAndValidation(t *testing.T) {
 	}
 	newPort := 17002
 	backup.Settings.AirPlay2Port = &newPort
+	backup.Alarms[0].Playback, backup.Alarms[0].Repeats = "repeat", 3
 	saved := a.Store.Snapshot()
 	port := 9411
 	backup.Settings.Port = &port
@@ -52,6 +53,9 @@ func TestConfigBackupRoundTripAndValidation(t *testing.T) {
 		t.Fatal(w.Body.String())
 	}
 	after := a.Store.Snapshot()
+	if after.Alarms[0].Playback != "repeat" || after.Alarms[0].Repeats != 3 {
+		t.Fatal("alarm playback settings lost in backup restore")
+	}
 	if after.AirPlay2Port != 17002 || after.DLNAPort != port || len(after.Alarms) != 1 || after.Alarms[0].Enabled || !reflect.DeepEqual(after.Xiaomi, saved.Xiaomi) || after.Secret != saved.Secret || after.PasswordHash != saved.PasswordHash || !a.valid(token) {
 		t.Fatal("round trip changed protected data or failed to restore")
 	}

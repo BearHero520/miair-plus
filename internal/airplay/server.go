@@ -8,9 +8,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 	"github.com/BearHero520/miair-plus/internal/media"
 	"github.com/grandcat/zeroconf"
 	"io"
+	"math"
 	"net"
 	"net/textproto"
 	"strconv"
@@ -161,10 +163,17 @@ type session struct {
 	stream                string
 	packets               chan []byte
 	flush                 chan struct{}
+	volume                chan int
+	play                  chan string
+	volumeDB              float64
 	wg                    sync.WaitGroup
 }
 
 func (ss *session) run() {
+	ss.volume = make(chan int, 1)
+	ss.play = make(chan string, 1)
+	ss.wg.Add(1)
+	go ss.speaker()
 	defer func() {
 		ss.cancel()
 		ss.conn.Close()
@@ -302,6 +311,7 @@ func (ss *session) handle(method string, h textproto.MIMEHeader, body []byte) (i
 		}
 		ss.sdp = sdp
 		ss.announced = true
+		diagnostics.Event("info", "AirPlay", "收到音频会话", map[string]string{"音箱": ss.server.name, "编码": sdp.Codec})
 	case "SETUP":
 		if !ss.announced || ss.live != nil {
 			return 455, result, nil
@@ -353,13 +363,16 @@ func (ss *session) handle(method string, h textproto.MIMEHeader, body []byte) (i
 					case <-ss.ctx.Done():
 						return
 					case <-timer.C:
+						diagnostics.Event("error", "AirPlay", "等待转码音频超时，请检查发送端音频、UDP 连通性及 FFmpeg 日志", map[string]string{"已生成字节": strconv.FormatInt(ss.live.Size(), 10)})
 						ss.cancel()
 						return
 					case <-tick.C:
 					}
 				}
-				if err := ss.server.target.StartAirPlay(ss.ctx, ss.stream, h.Get("User-Agent")); err != nil {
-					ss.cancel()
+				diagnostics.Event("info", "AirPlay", "转码音频已就绪，正在通知音箱播放", nil)
+				select {
+				case ss.play <- h.Get("User-Agent"):
+				case <-ss.ctx.Done():
 				}
 			}()
 		}
@@ -373,29 +386,33 @@ func (ss *session) handle(method string, h textproto.MIMEHeader, body []byte) (i
 	case "GET_PARAMETER":
 		if strings.Contains(string(body), "volume") {
 			result["Content-Type"] = "text/parameters"
-			return 200, result, []byte("volume: 0.000000\r\n")
+			return 200, result, []byte(fmt.Sprintf("volume: %.6f\r\n", ss.volumeDB))
 		}
 	case "SET_PARAMETER":
 		if strings.HasPrefix(h.Get("Content-Type"), "text/parameters") {
 			for _, line := range strings.Split(string(body), "\n") {
 				if v, ok := strings.CutPrefix(strings.TrimSpace(line), "volume:"); ok {
 					db, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-					if err != nil {
+					if err != nil || math.IsNaN(db) || math.IsInf(db, 0) {
 						return 400, result, nil
 					}
 					volume := int((db + 30) * 100 / 30)
-					if volume < 0 {
+					if db <= -144 {
 						volume = 0
+					} else if volume < 1 {
+						volume = 1
 					}
 					if volume > 100 {
 						volume = 100
 					}
-					ctx, cancel := context.WithTimeout(ss.ctx, 5*time.Second)
-					err = ss.server.target.SetVolume(ctx, volume)
-					cancel()
-					if err != nil {
-						return 500, result, nil
+					ss.volumeDB = db
+					// The RTSP reader must never wait for the cloud. Keep only the
+					// latest slider position while a previous update is in flight.
+					select {
+					case <-ss.volume:
+					default:
 					}
+					ss.volume <- volume
 				}
 			}
 		} else if h.Get("Content-Type") == "application/x-dmap-tagged" {
@@ -406,6 +423,48 @@ func (ss *session) handle(method string, h textproto.MIMEHeader, body []byte) (i
 		return 501, result, nil
 	}
 	return 200, result, nil
+}
+
+// All speaker commands are serialized outside the RTSP/audio readers. Apply
+// the initial phone volume before playback, then follow later volume changes.
+func (ss *session) speaker() {
+	defer ss.wg.Done()
+	setVolume := func(volume int) {
+		ctx, cancel := context.WithTimeout(ss.ctx, 5*time.Second)
+		defer cancel()
+		if err := ss.server.target.SetVolume(ctx, volume); err != nil && ss.ctx.Err() == nil {
+			diagnostics.Event("warn", "AirPlay", "音箱音量同步失败", map[string]string{"原因": err.Error()})
+		}
+	}
+	var client string
+	select {
+	case <-ss.ctx.Done():
+		return
+	case client = <-ss.play:
+	}
+	select {
+	case volume := <-ss.volume:
+		setVolume(volume)
+	default:
+	}
+	if ss.ctx.Err() != nil {
+		return
+	}
+	if err := ss.server.target.StartAirPlay(ss.ctx, ss.stream, client); err != nil {
+		if ss.ctx.Err() == nil {
+			diagnostics.Event("error", "AirPlay", "音箱播放指令失败", map[string]string{"原因": err.Error()})
+		}
+		ss.cancel()
+		return
+	}
+	for {
+		select {
+		case <-ss.ctx.Done():
+			return
+		case volume := <-ss.volume:
+			setVolume(volume)
+		}
+	}
 }
 func (ss *session) enqueue(p []byte) {
 	select {
@@ -500,6 +559,9 @@ func (ss *session) audio() {
 		case <-tick.C:
 		}
 		if err := jitter.Drain(time.Now(), ss.decoder.WritePacket, resend); err != nil {
+			if ss.ctx.Err() == nil {
+				diagnostics.Event("error", "AirPlay", "音频解码管道中断", map[string]string{"原因": err.Error()})
+			}
 			ss.cancel()
 			return
 		}

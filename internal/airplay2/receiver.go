@@ -357,6 +357,7 @@ func (r *Receiver) bridge(ctx context.Context, o Options, pcm io.Reader, metadat
 					case <-audioCtx.Done():
 						return
 					}
+					log.Printf("AirPlay 2: 转码音频已就绪，正在通知音箱播放")
 					if e := o.Target.StartAirPlay(audioCtx, url, "AirPlay 2"); e != nil && audioCtx.Err() == nil {
 						r.fail(fmt.Errorf("小米音箱启动播放失败: %w", e))
 					}

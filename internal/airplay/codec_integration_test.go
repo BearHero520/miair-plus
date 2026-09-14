@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/BearHero520/miair-plus/internal/media"
 )
 
 func TestALACDecodeIntegration(t *testing.T) {
@@ -42,6 +44,7 @@ func TestALACDecodeIntegration(t *testing.T) {
 	var mp4 bytes.Buffer
 	mp4.Write(s.initMP4())
 	var timestamp uint64
+	var frames [][]byte
 	for i, p := range packets.Packets {
 		var raw []byte
 		for _, line := range strings.Split(p.Data, "\n") {
@@ -57,6 +60,7 @@ func TestALACDecodeIntegration(t *testing.T) {
 			raw = append(raw, decoded...)
 		}
 		mp4.Write(fragment(uint32(i+1), timestamp, 4096, raw))
+		frames = append(frames, raw)
 		timestamp += 4096
 	}
 	decode := exec.CommandContext(ctx, ffmpeg, "-v", "error", "-f", "mp4", "-i", "pipe:0", "-f", "s16le", "pipe:1")
@@ -79,5 +83,28 @@ func TestALACDecodeIntegration(t *testing.T) {
 	}
 	if allZero {
 		t.Fatal("decoded silence")
+	}
+	// Exercise the production MP3 pipeline while stdin remains open. A file
+	// decode that only succeeds at EOF does not establish live playback works.
+	live := media.NewLive(65536, "audio/mpeg")
+	d, err := NewDecoder(ctx, ffmpeg, s, live)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	for repeat := 0; repeat < 4; repeat++ {
+		for _, frame := range frames {
+			if err := d.WritePacket(frame); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	deadline := time.After(5 * time.Second)
+	for live.Size() < 4096 {
+		select {
+		case <-deadline:
+			t.Fatalf("live MP3 did not become ready before EOF: %d bytes", live.Size())
+		case <-time.After(10 * time.Millisecond):
+		}
 	}
 }

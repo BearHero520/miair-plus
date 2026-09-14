@@ -388,7 +388,24 @@ func (r *Renderer) StartAirPlay(ctx context.Context, stream, client string) erro
 	r.invalidateLocked()
 	generation := r.generation
 	r.mu.Unlock()
-	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error { return r.controller.Play(ctx, s, stream) }, func() {
+	return r.commandAt(ctx, generation, func(ctx context.Context, s config.Speaker) error {
+		r.mu.Lock()
+		volume := r.volume
+		if r.mute {
+			volume = 0
+		}
+		r.mu.Unlock()
+		if err := r.controller.Play(ctx, s, stream); err != nil {
+			return err
+		}
+		// AirPlay 2 adjusts PCM gain, not the Xiaomi speaker's hardware volume.
+		// Apply the selected volume just as DLNA does; otherwise a previously
+		// silent speaker stays silent even while receiving valid audio.
+		if err := r.controller.Volume(ctx, s, volume); err != nil {
+			diagnostics.Event("warn", "AirPlay", "播放指令已发送，但音箱音量设置失败", map[string]string{"音箱": s.DisplayName(), "原因": err.Error()})
+		}
+		return nil
+	}, func() {
 		r.airplay = true
 		r.airClient = client
 		r.state = "PLAYING"

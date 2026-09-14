@@ -85,3 +85,20 @@ func TestLiveMemoryIsBoundedAndClose(t *testing.T) {
 		t.Fatal("write after close")
 	}
 }
+
+func TestLiveIgnoresRangeProbes(t *testing.T) {
+	for _, header := range []string{"", "bytes=0-", "bytes=0-1", "bytes=0-65535", "bytes=1024-", "bytes=-128"} {
+		t.Run(header, func(t *testing.T) {
+			live := NewLive(65536, "audio/mpeg")
+			live.Write([]byte("stream data"))
+			live.Close()
+			request := httptest.NewRequest("GET", "/live/test", nil)
+			request.Header.Set("Range", header)
+			w := httptest.NewRecorder()
+			live.ServeHTTP(w, request)
+			if w.Code != 200 || w.Body.String() != "stream data" || w.Header().Get("Content-Range") != "" || w.Header().Get("Accept-Ranges") != "none" {
+				t.Fatalf("range probe failed: %d %v %q", w.Code, w.Header(), w.Body.String())
+			}
+		})
+	}
+}

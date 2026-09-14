@@ -6,7 +6,7 @@
   <section v-for="row in rows" :key="row.alarm.id" class="glass alarm-card">
    <div class="section-heading"><strong>{{row.alarm.name}}</strong><n-switch :value="row.alarm.enabled" :disabled="busy||active(row.state)" :aria-label="`启用${row.alarm.name}`" @update:value="toggle(row.alarm,$event)"/></div>
    <div class="alarm-clock">{{row.alarm.time}}<small>{{ruleLabel(row.alarm)}}</small></div>
-   <p>{{speakerName(row.alarm.speaker)}} · {{row.alarm.volume}}% 音量 · 最长 {{row.alarm.minutes}} 分钟</p>
+   <p>{{speakerName(row.alarm.speaker)}} · {{row.alarm.volume}}% 音量 · {{playbackLabel(row.alarm)}}</p>
    <p class="alarm-sound">{{audioName(row.alarm.sound)}}</p>
    <n-alert v-if="!row.calendar_ready" type="warning" style="margin-top:12px">当前年份日历未收录，该规则暂停触发。请更新日历。</n-alert>
    <p v-if="row.error" class="alarm-error">{{row.error}}</p>
@@ -15,7 +15,7 @@
    <p v-if="row.alarm.enabled&&row.next.length" class="alarm-next">接下来：{{row.next.join(' / ')}}</p>
   </section>
  </div>
- <section class="glass alarm-help"><strong>铃声与停止方式</strong><p>可从电脑或手机上传音乐，也可通过飞牛选择 NAS 中的文件并授权。已导入音乐保存在 <b>miair-plus / ringtones</b>，可从铃声库复用。支持 MP3、WAV、FLAC、OGG、AAC，单文件最大 100 MB。</p><p>铃声播放一次，播完或到最长时长后结束。可在此页停止或延后，也可尝试“小爱同学，停止播放”或机身暂停键，语音／按键效果取决于音箱型号。本功能独立于小爱内置闹钟，需要 NAS 与音箱在线。</p><div class="alarm-calendar"><span>中国大陆调休日历：{{Object.keys(calendar).join('、')||'未载入'}}</span><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(false)">更新今年</n-button><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(true)">获取明年</n-button></div><p>法定工作日含周末补班；休息日含周末与放假调休；仅节假日只在公告放假日期响铃。日历未收录的年份不会猜测。</p></section>
+ <section class="glass alarm-help"><strong>铃声与停止方式</strong><p>可从电脑或手机上传音乐，也可通过飞牛选择 NAS 中的文件并授权。已导入音乐保存在 <b>miair-plus / ringtones</b>，可从铃声库复用。支持 MP3、WAV、FLAC、OGG、AAC，单文件最大 100 MB。</p><p>可按时长播放、完整播放一首，或按次数循环整首音乐。循环次数包含第一遍，全部播完后结束。停止或延后会终止本次循环。可在此页停止或延后，也可尝试“小爱同学，停止播放”或机身暂停键，语音／按键效果取决于音箱型号。本功能独立于小爱内置闹钟，需要 NAS 与音箱在线。</p><div class="alarm-calendar"><span>中国大陆调休日历：{{Object.keys(calendar).join('、')||'未载入'}}</span><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(false)">更新今年</n-button><n-button size="small" :loading="calendarBusy" @click="refreshCalendar(true)">获取明年</n-button></div><p>法定工作日含周末补班；休息日含周末与放假调休；仅节假日只在公告放假日期响铃。日历未收录的年份不会猜测。</p></section>
  <n-modal v-model:show="show" preset="card" :title="form.id?'编辑闹钟':'新建闹钟'" class="alarm-modal" :style="{width:'min(560px, calc(100vw - 32px))',maxHeight:'calc(100dvh - 48px)'}" :content-style="{overflowY:'auto',minHeight:'0'}" :mask-closable="!busy" :closable="!busy">
   <n-form label-placement="top" :disabled="busy">
    <n-form-item label="名称"><n-input v-model:value="form.name" maxlength="32" placeholder="例如：起床时间"/></n-form-item>
@@ -24,7 +24,10 @@
    <n-form-item label="时区"><n-select v-model:value="form.timezone" :options="[{label:'北京时间 · Asia/Shanghai',value:'Asia/Shanghai'}]"/></n-form-item>
    <n-form-item label="目标音箱"><n-select v-model:value="form.speaker" :options="speakerOptions" placeholder="请选择已启用的音箱"/></n-form-item>
    <n-form-item label="闹钟音乐"><div class="alarm-music-source"><n-input :value="audioName(form.sound)" readonly placeholder="上传音乐或从 NAS 选择"/><div class="alarm-actions"><n-button :loading="uploading" :disabled="nasBusy||busy" @click="uploadInput?.click()">上传音乐</n-button><n-button :loading="nasBusy" :disabled="uploading||busy" @click="selectNAS">从 NAS 选择</n-button><n-button quaternary :disabled="uploading||busy" @click="openFiles('.')">铃声库</n-button><n-button quaternary :disabled="busy" @click="nasSettings">飞牛授权设置</n-button></div><input ref="uploadInput" type="file" accept=".mp3,.wav,.flac,.ogg,.aac" hidden @change="uploadMusic"/><p v-if="uploading">正在上传 {{uploadProgress}}%</p><p v-if="nasBusy">请在飞牛页面选择文件并授权，完成后返回这里。<n-button text @click="refreshNASResult">读取授权结果</n-button> · <n-button text @click="cancelNAS">取消</n-button></p></div></n-form-item>
-   <div class="alarm-fields"><n-form-item label="响铃音量（%）"><n-input-number v-model:value="form.volume" :min="1" :max="100"/></n-form-item><n-form-item label="最长响铃（分钟）"><n-input-number v-model:value="form.minutes" :min="1" :max="10"/></n-form-item></div>
+   <n-form-item label="播放方式"><n-select v-model:value="form.playback" :options="playbackOptions"/></n-form-item>
+   <n-form-item v-if="form.playback==='repeat'" label="整首播放次数（含第一遍）"><n-input-number v-model:value="form.repeats" :min="2" :max="20" :precision="0"/></n-form-item>
+   <p class="playback-hint">{{form.playback==='timed'?'播放一次，歌曲播完或达到设定时长后停止。':form.playback==='repeat'?'每遍都播放完整首歌，达到指定次数后停止。':'从头播放到歌曲结束，不受分钟限制。'}}</p>
+   <div class="alarm-fields"><n-form-item label="响铃音量（%）"><n-input-number v-model:value="form.volume" :min="1" :max="100"/></n-form-item><n-form-item v-if="form.playback==='timed'" label="最长响铃（分钟）"><n-input-number v-model:value="form.minutes" :min="1" :max="10"/></n-form-item></div>
    <n-alert v-if="saveError" type="error" style="margin-bottom:14px">{{saveError}}</n-alert>
    <p v-if="busy">正在保存并准备铃声，请稍候…</p><n-button type="primary" block :loading="busy" :disabled="uploading||nasBusy" @click="save">保存闹钟</n-button>
   </n-form>
@@ -45,14 +48,16 @@ import {type AppAuthResult} from '@trimjs/web-app'
 import {fnos as sdk,waitForFnos,openFnosSettings} from '@/utils/fnos'
 import {storage as localStorage} from '@/utils/storage'
 import {appURL,basePath} from '@/utils/basePath'
-type Alarm={id:string;name:string;time:string;timezone:string;rule:string;days:number;speaker:string;sound:string;volume:number;minutes:number;enabled:boolean}
+type Alarm={id:string;name:string;time:string;timezone:string;rule:string;days:number;speaker:string;sound:string;volume:number;minutes:number;playback?:string;repeats?:number;enabled:boolean}
 type Row={alarm:Alarm;state:string;error:string;next:string[];calendar_ready:boolean}
 type FileItem={name:string;path:string;directory:boolean}
 const rows=ref<Row[]>([]),speakers=ref<{did:string;dlna_name:string;name:string;enabled:boolean}[]>([]),calendar=ref<Record<string,string[]>>({}),error=ref(''),saveError=ref(''),show=ref(false),busy=ref(false),calendarBusy=ref(false),picker=ref(false),folder=ref('.'),files=ref<FileItem[]>([]),fileError=ref(''),filesBusy=ref(false),message=useMessage()
-const fresh=():Alarm=>({id:'',name:'起床闹钟',time:'07:00',timezone:'Asia/Shanghai',rule:'workday',days:62,speaker:'',sound:'',volume:30,minutes:3,enabled:true})
+const fresh=():Alarm=>({id:'',name:'起床闹钟',time:'07:00',timezone:'Asia/Shanghai',rule:'workday',days:62,speaker:'',sound:'',volume:30,minutes:3,playback:'full',repeats:2,enabled:true})
 const uploadInput=ref<HTMLInputElement>(),uploading=ref(false),uploadProgress=ref(0),nasBusy=ref(false)
 let nasState='',nasWindow:Window|null=null,uploadAbort:AbortController|undefined,nasImportAbort:AbortController|undefined,nasGeneration=0
 const form=reactive(fresh()),dayNames=['周日','周一','周二','周三','周四','周五','周六']
+const playbackOptions=[{label:'整首播放一次',value:'full'},{label:'循环播放整首',value:'repeat'},{label:'按时长播放',value:'timed'}]
+const playbackLabel=(a:Alarm)=>a.playback==='full'?'整首播放一次':a.playback==='repeat'?`整首播放 ${a.repeats} 次`:`最长 ${a.minutes} 分钟`
 const rules=[{label:'法定工作日（含调休补班）',value:'workday'},{label:'休息日（周末及节假日）',value:'restday'},{label:'仅法定节假日',value:'holiday'},{label:'指定星期 / 每天',value:'weekly'}]
 const selectedDays=computed({get:()=>dayNames.map((_,i)=>i).filter(i=>form.days&(1<<i)),set:(days:(string|number)[])=>{form.days=days.reduce<number>((mask,d)=>mask|(1<<Number(d)),0)}})
 const parentFolder=computed(()=>folder.value.split('/').slice(0,-1).join('/')||'.')
@@ -67,8 +72,8 @@ const speakerName=(id:string)=>speakerOptions.value.find(s=>s.value===id)?.label
 const ruleLabel=(a:Alarm)=>a.rule==='weekly'?a.days===127?'每天':dayNames.filter((_,i)=>a.days&(1<<i)).join('、'):rules.find(r=>r.value===a.rule)?.label
 let timer:ReturnType<typeof setInterval>|undefined,inFlight=false
 async function load(){if(inFlight)return;inFlight=true;try{const response=await http.get('/alarms');rows.value=response.data.alarms;calendar.value=response.data.calendar;error.value=''}catch(e){error.value=reason(e)}finally{inFlight=false}}
-function edit(a?:Alarm){Object.assign(form,fresh(),a||{});saveError.value='';show.value=true}
-async function save(){if(uploading.value||nasBusy.value)return;busy.value=true;saveError.value='';try{await http.post('/alarms',form,{timeout:60000});show.value=false;await load();message.success('闹钟已保存')}catch(e){saveError.value=reason(e)}finally{busy.value=false}}
+function edit(a?:Alarm){Object.assign(form,fresh(),a||{},a?{playback:a.playback||'timed',repeats:a.repeats||2}:{});saveError.value='';show.value=true}
+async function save(){if(uploading.value||nasBusy.value)return;busy.value=true;saveError.value='';try{await http.post('/alarms',form,{timeout:210000});show.value=false;await load();message.success('闹钟已保存')}catch(e){saveError.value=reason(e)}finally{busy.value=false}}
 async function toggle(a:Alarm,enabled:boolean){busy.value=true;try{await http.post('/alarms',{...a,enabled});await load()}catch(e){message.error(reason(e))}finally{busy.value=false}}
 async function action(id:string,action:string){busy.value=true;try{await http.post(`/alarms/${id}/${action}`);await load()}catch(e){message.error(reason(e));await load()}finally{busy.value=false}}
 async function remove(id:string){busy.value=true;try{await http.delete(`/alarms/${id}`);await load()}catch(e){message.error(reason(e))}finally{busy.value=false}}

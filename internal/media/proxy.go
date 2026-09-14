@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/BearHero520/miair-plus/internal/diagnostics"
 )
 
 type Entry struct {
@@ -207,10 +209,14 @@ func (l *Live) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cursor := int64(0)
-	if header := r.Header.Get("Range"); header != "" && header != "bytes=0-" {
-		http.Error(w, "live audio is not seekable", 416)
-		return
-	}
+	diagnostics.Event("info", "音频流", "播放器开始拉取实时音频", map[string]string{"客户端": r.RemoteAddr, "Range": r.Header.Get("Range")})
+	var sent int64
+	defer func() {
+		diagnostics.Event("info", "音频流", "播放器结束拉取实时音频", map[string]string{"客户端": r.RemoteAddr, "已发送字节": strconv.FormatInt(sent, 10)})
+	}()
+	// A live stream has no fixed length or seekable representation. Ignore
+	// Range (including bounded probe requests) and send the full stream as 200.
+	// Rejecting probes with 416 can make a renderer abandon playback entirely.
 	rc := http.NewResponseController(w)
 	w.WriteHeader(200)
 	for {
@@ -242,10 +248,14 @@ func (l *Live) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		l.mu.Unlock()
 		if len(chunk) > 0 {
 			_ = rc.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if _, err := w.Write(chunk); err != nil {
+			n, err := w.Write(chunk)
+			sent += int64(n)
+			if err != nil {
 				return
 			}
-			_ = rc.Flush()
+			if err := rc.Flush(); err != nil {
+				return
+			}
 			continue
 		}
 		if closed {

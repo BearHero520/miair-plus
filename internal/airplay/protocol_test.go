@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"net"
+	"net/textproto"
 	"testing"
 	"time"
 )
@@ -65,6 +66,33 @@ func TestNTPFraction(t *testing.T) {
 	b := ntp(time.Unix(0, 500000000))
 	if binary.BigEndian.Uint32(b) != 2208988800 || binary.BigEndian.Uint32(b[4:]) != 1<<31 {
 		t.Fatal(b)
+	}
+}
+
+func TestVolumeMinimumIsNotMute(t *testing.T) {
+	ss := &session{volume: make(chan int, 1)}
+	h := textproto.MIMEHeader{}
+	h.Set("Content-Type", "text/parameters")
+	for _, tc := range []struct {
+		body string
+		want int
+	}{{"-144", 0}, {"-30", 1}, {"-29.9", 1}, {"-15", 50}, {"0", 100}} {
+		code, _, _ := ss.handle("SET_PARAMETER", h, []byte("volume: "+tc.body+"\r\n"))
+		if code != 200 {
+			t.Fatal(code)
+		}
+		if got := <-ss.volume; got != tc.want {
+			t.Fatalf("%s dB: %d, want %d", tc.body, got, tc.want)
+		}
+		_, _, body := ss.handle("GET_PARAMETER", h, []byte("volume"))
+		if len(body) == 0 {
+			t.Fatal("missing volume response")
+		}
+	}
+	for _, value := range []string{"NaN", "+Inf", "-Inf"} {
+		if code, _, _ := ss.handle("SET_PARAMETER", h, []byte("volume: "+value)); code != 400 {
+			t.Fatal("invalid volume accepted", value)
+		}
 	}
 }
 func FuzzRTP(f *testing.F) {

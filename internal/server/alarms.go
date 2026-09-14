@@ -216,15 +216,19 @@ func (e *AlarmEngine) play(ctx context.Context, r *alarmRun) {
 	r.Started = time.Now()
 	e.mu.Unlock()
 	diagnostics.Event("info", "闹钟", "开始响铃", map[string]string{"闹钟": r.Alarm.Name, "音箱": r.Renderer.Config().DisplayName()})
-	deadline := time.NewTimer(time.Duration(r.Alarm.Minutes) * time.Minute)
-	defer deadline.Stop()
+	var deadline <-chan time.Time
+	if alarmTimed(r.Alarm) {
+		timer := time.NewTimer(time.Duration(r.Alarm.Minutes) * time.Minute)
+		defer timer.Stop()
+		deadline = timer.C
+	}
 	poll := time.NewTicker(2 * time.Second)
 	defer poll.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-deadline.C:
+		case <-deadline:
 			stop, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			_ = e.Stop(stop, r.Alarm.ID, false)
 			cancel()
@@ -261,7 +265,7 @@ func (e *AlarmEngine) Stop(ctx context.Context, id string, snooze bool) error {
 	defer e.mu.Unlock()
 	if err != nil {
 		r.State = "stop_failed"
-		r.Error = "停止命令未确认，请说“小爱同学，停止播放”或按音箱暂停键；音频最长为设定时长"
+		r.Error = "停止命令未确认，请说“小爱同学，停止播放”或按音箱暂停键"
 		diagnostics.Event("error", "闹钟", "停止响铃失败", map[string]string{"原因": err.Error()})
 		return errors.New(r.Error)
 	}
@@ -305,7 +309,7 @@ func (e *AlarmEngine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.mu.Lock()
 	file := ""
 	for _, run := range e.runs {
-		if token != "" && run.Token == token && (run.State == "starting" || run.State == "ringing") && time.Since(run.Started) < time.Duration(run.Alarm.Minutes+1)*time.Minute {
+		if token != "" && run.Token == token && (run.State == "starting" || run.State == "ringing") && (!alarmTimed(run.Alarm) || time.Since(run.Started) < time.Duration(run.Alarm.Minutes+1)*time.Minute) {
 			file = run.Alarm.Audio
 			break
 		}
@@ -378,7 +382,15 @@ func (e *AlarmEngine) Files(path string) (any, error) {
 	sort.Slice(files, func(i, j int) bool { return files[i]["name"].(string) < files[j]["name"].(string) })
 	return map[string]any{"files": files, "path": path}, nil
 }
+func alarmTimed(a config.Alarm) bool { return a.Playback == "" || a.Playback == "timed" }
+
 func validateAlarm(a config.Alarm) error {
+	if !alarmTimed(a) && a.Playback != "full" && a.Playback != "repeat" {
+		return errors.New("请选择有效的播放方式")
+	}
+	if a.Playback == "repeat" && (a.Repeats < 2 || a.Repeats > 20) {
+		return errors.New("循环播放次数须为 2–20 次")
+	}
 	parsed, err := time.Parse("15:04", a.Time)
 	if err != nil || parsed.Format("15:04") != a.Time {
 		return errors.New("请输入 HH:mm 时间")
@@ -392,8 +404,11 @@ func validateAlarm(a config.Alarm) error {
 	if a.Rule != "" && a.Rule != "weekly" && a.Timezone != "Asia/Shanghai" {
 		return errors.New("法定节假日规则请使用北京时间 Asia/Shanghai")
 	}
-	if strings.TrimSpace(a.Name) == "" || len(a.Name) > 100 || a.Days < 1 || a.Days > 127 || a.Volume < 1 || a.Volume > 100 || a.Minutes < 1 || a.Minutes > 10 {
-		return errors.New("请填写名称、重复日期、1–100 音量和 1–10 分钟最长时长")
+	if strings.TrimSpace(a.Name) == "" || len(a.Name) > 100 || a.Days < 1 || a.Days > 127 || a.Volume < 1 || a.Volume > 100 {
+		return errors.New("请填写名称、重复日期和 1–100 音量")
+	}
+	if alarmTimed(a) && (a.Minutes < 1 || a.Minutes > 10) {
+		return errors.New("最长响铃时长须为 1–10 分钟")
 	}
 	return nil
 }
@@ -436,8 +451,8 @@ func (e *AlarmEngine) Save(ctx context.Context, a config.Alarm) error {
 	a.LastFire = old.LastFire
 	a.SnoozeAt = 0
 	st, cacheErr := os.Stat(filepath.Join(e.store.Directory(), "alarm-audio", a.Audio+".mp3"))
-	if old.Sound != a.Sound || old.Minutes != a.Minutes || !validAudioID(a.Audio) || cacheErr != nil || st.Size() == 0 {
-		audio, err := e.importSound(ctx, a.Sound, a.Minutes)
+	if old.Sound != a.Sound || old.Minutes != a.Minutes || old.Playback != a.Playback || old.Repeats != a.Repeats || !validAudioID(a.Audio) || cacheErr != nil || st.Size() == 0 {
+		audio, err := e.prepareSound(ctx, a)
 		if err != nil {
 			return err
 		}
@@ -471,6 +486,11 @@ func (e *AlarmEngine) Save(ctx context.Context, a config.Alarm) error {
 	return err
 }
 func (e *AlarmEngine) importSound(ctx context.Context, path string, minutes int) (string, error) {
+	return e.prepareSound(ctx, config.Alarm{Sound: path, Minutes: minutes})
+}
+
+func (e *AlarmEngine) prepareSound(ctx context.Context, a config.Alarm) (string, error) {
+	path := a.Sound
 	format := alarmFormats[strings.ToLower(filepath.Ext(path))]
 	if format == "" {
 		return "", errors.New("支持 MP3、WAV、FLAC、OGG、AAC 铃声")
@@ -499,10 +519,30 @@ func (e *AlarmEngine) importSound(ctx context.Context, path string, minutes int)
 	}
 	id := config.Random(16)
 	out := filepath.Join(dir, id+".mp3")
-	operation, cancel := context.WithTimeout(ctx, 45*time.Second)
+	// Copy the confined source into a private seekable file: stream_loop cannot
+	// rewind stdin, and reopening the original path would bypass os.OpenRoot.
+	source, err := os.CreateTemp(dir, ".source-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.Remove(source.Name())
+	size, copyErr := io.Copy(source, io.LimitReader(input, (100<<20)+1))
+	closeErr := source.Close()
+	if copyErr != nil || closeErr != nil || size == 0 || size > 100<<20 {
+		return "", errors.New("无法准备铃声源文件")
+	}
+	operation, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
-	command := exec.CommandContext(operation, ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "pipe", "-f", format, "-i", "pipe:0", "-t", fmt.Sprint(minutes*60), "-vn", "-map", "0:a:0", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", "-f", "mp3", out)
-	command.Stdin = io.LimitReader(input, 100<<20)
+	args := []string{"-hide_banner", "-loglevel", "error", "-nostdin", "-protocol_whitelist", "file,pipe"}
+	if a.Playback == "repeat" {
+		args = append(args, "-stream_loop", fmt.Sprint(a.Repeats-1))
+	}
+	args = append(args, "-f", format, "-i", source.Name())
+	if alarmTimed(a) {
+		args = append(args, "-t", fmt.Sprint(a.Minutes*60))
+	}
+	args = append(args, "-vn", "-map", "0:a:0", "-ac", "2", "-ar", "44100", "-c:a", "libmp3lame", "-b:a", "128k", "-f", "mp3", out)
+	command := exec.CommandContext(operation, ffmpeg, args...)
 	if err = command.Run(); err != nil {
 		os.Remove(out)
 		return "", errors.New("铃声转码失败或超时，请选择有效音频文件")

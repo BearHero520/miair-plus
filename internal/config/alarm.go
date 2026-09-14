@@ -12,6 +12,8 @@ type Alarm struct {
 	Audio    string `json:"audio"`
 	Volume   int    `json:"volume"`
 	Minutes  int    `json:"minutes"`
+	Playback string `json:"playback,omitempty"` // empty/timed, full, repeat
+	Repeats  int    `json:"repeats,omitempty"`  // total complete plays in repeat mode
 	Enabled  bool   `json:"enabled"`
 	LastFire string `json:"last_fire,omitempty"`
 	SnoozeAt int64  `json:"snooze_at,omitempty"`
