@@ -1,11 +1,12 @@
 #!/bin/bash
 set -euo pipefail
-umask 077
+umask 022
 mkdir -p /run/dbus /run/avahi-daemon
 rm -f /run/dbus/pid /run/avahi-daemon/pid
 dbus-uuidgen --ensure
 pids=()
 cleanup() {
+  trap - EXIT
   trap '' TERM INT
   kill -TERM "${pids[@]}" 2>/dev/null || true
   wait || true
@@ -28,6 +29,7 @@ for attempt in {1..50}; do
   sleep 0.1
 done
 avahi-browse --all --terminate >/dev/null
+umask 077
 "$@" &
 app_pid=$!
 pids+=("$app_pid")
