@@ -1,6 +1,6 @@
 # Docker 部署
 
-镜像：`bearhero/miair-plus:docker-2.0.9`（Docker Hub），支持 Linux amd64 / arm64。
+镜像：`bearhero/miair-plus:docker-2.0.9-1`（Docker Hub），支持 Linux amd64 / arm64。
 `latest` 指向最新的 Docker 正式发布；固定版本标签方便回退。Docker 版本与 FPK 共用应用源码，当前应用版本为 2.0.9。
 
 ## 安装
@@ -57,8 +57,8 @@ GitHub Actions 的 `Build and publish Docker` 使用原生 amd64 / arm64 runner 
 仓库 Actions Secret `DOCKERHUB_TOKEN` 需要 Docker Hub 用户 `bearhero` 的 Read & Write 令牌。推送 `docker-*` Git 标签发布同名镜像标签及 `latest`；手动运行发布 `edge`。构建镜像归档保留 7 天，即使发布凭据缺失也能取得测试通过的构建产物。
 
 ```sh
-git tag docker-2.0.9
-git push origin docker-2.0.9
+git tag docker-2.0.9-1
+git push origin docker-2.0.9-1
 ```
 
 CI 的原生组件测试不代替真实小爱音箱、手机与 NAS 的投送验收。

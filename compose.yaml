@@ -1,6 +1,6 @@
 services:
   miair-plus:
-    image: bearhero/miair-plus:docker-2.0.9
+    image: bearhero/miair-plus:docker-2.0.9-1
     container_name: miair-plus
     network_mode: host
     restart: unless-stopped

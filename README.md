@@ -43,7 +43,7 @@
 ### Docker（Linux x86_64 / ARM64）
 
 使用仓库中的 `compose.yaml`，执行 `docker compose up -d`，访问 `http://NAS局域网IP:8310`。
-镜像为 `bearhero/miair-plus:docker-2.0.9`，使用 host 网络，数据保存在 `./data`；内置 FFmpeg 与 AirPlay 2 组件。
+镜像为 `bearhero/miair-plus:docker-2.0.9-1`，使用 host 网络，数据保存在 `./data`；内置 FFmpeg 与 AirPlay 2 组件。
 完整安装、迁移、更新及注意事项见 [Docker 部署说明](docs/DOCKER.md)。
 
 ### 飞牛 FPK
