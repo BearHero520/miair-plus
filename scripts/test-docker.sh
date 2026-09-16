@@ -2,7 +2,7 @@
 set -euo pipefail
 image=${1:-miair-plus:test}
 cleanup() {
-  docker logs miair-docker-test 2>/dev/null || true
+  docker logs miair-docker-test 2>&1 || true
   docker rm -f miair-docker-test 2>/dev/null || true
   docker volume rm miair-docker-test-data 2>/dev/null || true
 }

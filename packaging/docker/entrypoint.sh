@@ -2,7 +2,7 @@
 set -euo pipefail
 umask 022
 mkdir -p /run/dbus /run/avahi-daemon
-rm -f /run/dbus/pid /run/avahi-daemon/pid
+rm -f /run/dbus/pid /run/dbus/system_bus_socket /run/avahi-daemon/pid
 dbus-uuidgen --ensure
 pids=()
 cleanup() {
@@ -16,11 +16,11 @@ trap cleanup EXIT
 dbus-daemon --system --nofork &
 pids+=("$!")
 for attempt in {1..50}; do
-  [ -S /run/dbus/system_bus_socket ] && break
+  dbus-send --system --type=method_call --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null 2>&1 && break
   kill -0 "${pids[0]}"
   sleep 0.1
 done
-test -S /run/dbus/system_bus_socket
+dbus-send --system --type=method_call --print-reply --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null
 avahi-daemon --no-chroot &
 pids+=("$!")
 for attempt in {1..50}; do
