@@ -47,7 +47,7 @@ docker run -d --name miair-plus --network host --restart unless-stopped \
   -e TZ=Asia/Shanghai -v "$PWD/data:/data" miair-plus:local
 ```
 
-前端和 Go 服务从当前源码构建。原生音频组件从 v2.0.9 FPK 提取，先校验固定包 SHA-256，再校验组件清单，不依赖本地 `build/` 文件。
+前端和 Go 服务从当前源码构建。原生音频组件从 v2.0.9 FPK 提取，校验固定包 SHA-256 和组件可执行权限，不依赖本地 `build/` 文件。
 原生构建脚本为 `scripts/build-airplay2.sh`，许可证随镜像保存在 `/opt/miair-audio/licenses`。对应源码见 [v2.0.9 Release](https://github.com/BearHero520/miair-plus/releases/tag/v2.0.9) 的 `airplay2-sources-amd64.tar.xz` / `airplay2-sources-arm64.tar.xz`。
 
 ## 发布与验证

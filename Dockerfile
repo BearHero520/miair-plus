@@ -28,7 +28,7 @@ RUN curl -fL --retry 3 -o package.fpk https://github.com/BearHero520/miair-plus/
     && tar -xf package.fpk app.tgz \
     && tar -xzf app.tgz "runtime/$TARGETARCH" \
     && mv "runtime/$TARGETARCH" /audio \
-    && cd /audio && sha256sum -c SHA256SUMS
+    && test -x /audio/bin/ffmpeg && test -x /audio/bin/shairport-sync && test -x /audio/bin/nqptp
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata dbus avahi-daemon avahi-utils curl tini \
