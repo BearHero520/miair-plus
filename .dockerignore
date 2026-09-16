@@ -1,0 +1,13 @@
+**
+!Dockerfile
+!go.mod
+!go.sum
+!LICENSE
+!UPSTREAM.md
+!cmd/**
+!internal/**
+internal/web/dist/**
+!frontend/**
+frontend/node_modules/**
+frontend/dist/**
+!packaging/docker/**

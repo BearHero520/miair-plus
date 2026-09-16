@@ -40,6 +40,14 @@
 
 ## 安装与使用
 
+### Docker（Linux x86_64 / ARM64）
+
+使用仓库中的 `compose.yaml`，执行 `docker compose up -d`，访问 `http://NAS局域网IP:8310`。
+镜像为 `bearhero/miair-plus:docker-2.0.9`，使用 host 网络，数据保存在 `./data`；内置 FFmpeg 与 AirPlay 2 组件。
+完整安装、迁移、更新及注意事项见 [Docker 部署说明](docs/DOCKER.md)。
+
+### 飞牛 FPK
+
 1. 从 [Releases](https://github.com/BearHero520/miair-plus/releases) 下载 `all.fpk` 通用安装包，x86_64 与 ARM64 使用同一文件。
 2. 在飞牛应用中心选择“手动安装”，安装后打开管理页面并创建管理员账号。
 3. 进入“账号”完成米家扫码登录，在“音箱”中刷新并启用需要的设备。

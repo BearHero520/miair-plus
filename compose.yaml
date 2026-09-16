@@ -1,0 +1,16 @@
+services:
+  miair-plus:
+    image: bearhero/miair-plus:docker-2.0.9
+    container_name: miair-plus
+    network_mode: host
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

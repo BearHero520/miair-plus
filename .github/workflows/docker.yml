@@ -1,0 +1,75 @@
+name: Build and publish Docker
+on:
+  workflow_dispatch:
+  push:
+    tags: ['docker-*']
+permissions:
+  contents: read
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: miair-plus:test
+          cache-from: type=gha,scope=docker-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=docker-${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-only
+            org.opencontainers.image.revision=${{ github.sha }}
+      - name: Test container and native audio
+        run: bash scripts/test-docker.sh
+      - name: Export tested architecture
+        run: |
+          docker tag miair-plus:test "bearhero/miair-plus:build-${GITHUB_SHA}-${{ matrix.arch }}"
+          docker save "bearhero/miair-plus:build-${GITHUB_SHA}-${{ matrix.arch }}" | gzip > image-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-${{ matrix.arch }}
+          path: image-${{ matrix.arch }}.tar.gz
+          retention-days: 7
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: bearhero
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: docker-*
+          merge-multiple: true
+      - name: Publish multi-platform manifest
+        run: |
+          image="bearhero/miair-plus"
+          for arch in amd64 arm64; do
+            docker load -i "image-$arch.tar.gz"
+            docker push "$image:build-${GITHUB_SHA}-$arch"
+          done
+          tag="${GITHUB_REF_NAME}"
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then tag="edge"; fi
+          tags=(--tag "$image:$tag")
+          if [[ "$tag" == docker-* ]]; then tags+=(--tag "$image:latest"); fi
+          docker buildx imagetools create "${tags[@]}" "$image:build-${GITHUB_SHA}-amd64" "$image:build-${GITHUB_SHA}-arm64"
+          docker buildx imagetools inspect "$image:$tag"
